@@ -39,4 +39,24 @@ export default defineSchema({
     moodId: v.string(),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  // Server-side daily snapshots: one pick-list per mood per day (UTC).
+  // Written by the midnight cron + backfillable via snapshots:fetchAndStore.
+  // Clients read today's snapshot first, fall back to live TMDB if missing.
+  dailySnapshots: defineTable({
+    moodId: v.string(),
+    date: v.string(), // YYYY-MM-DD (UTC)
+    movies: v.array(
+      v.object({
+        id: v.number(),
+        title: v.string(),
+        poster_path: v.optional(v.string()),
+        release_date: v.optional(v.string()),
+        vote_average: v.optional(v.number()),
+        overview: v.optional(v.string()),
+        genre_ids: v.array(v.number()),
+      })
+    ),
+    createdAt: v.number(),
+  }).index("by_mood_date", ["moodId", "date"]),
 });

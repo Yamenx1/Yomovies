@@ -22,11 +22,20 @@ export default function MovieGrid({
   apiReady,
   favoriteIds,
   onToggleFavorite,
+  source,
+  activeDate,
+  history,
+  onSelectDate,
 }) {
   const todayLabel = new Date().toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
   });
+  const formatDay = (iso) =>
+    new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    });
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px 80px' }}>
       {/* Mood blurb + reset button */}
@@ -54,8 +63,33 @@ export default function MovieGrid({
             fontWeight: 600,
           }}
         >
-          Fresh picks · {todayLabel}
+          {source === 'snapshot'
+            ? `Daily picks · ${formatDay(activeDate)}`
+            : `Live picks · ${todayLabel}`}
         </span>
+        {history.length > 1 && (
+          <select
+            value={activeDate}
+            onChange={(e) => onSelectDate(e.target.value)}
+            aria-label="View picks from a past day"
+            style={{
+              background: t.surface,
+              border: `1px solid ${t.border}`,
+              borderRadius: 999,
+              padding: '4px 10px',
+              fontSize: 12,
+              color: t.muted,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {history.map((h) => (
+              <option key={h.date} value={h.date}>
+                {formatDay(h.date)} ({h.count})
+              </option>
+            ))}
+          </select>
+        )}
         {excludedCount > 0 && (
           <button
             onClick={onClearExcluded}

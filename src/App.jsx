@@ -40,6 +40,13 @@ export default function App() {
   const [localExcluded, setLocalExcluded] = useState(() => new Set());
   const [localFavorites, setLocalFavorites] = useState(() => new Set());
 
+  // Snapshot day being viewed (null = latest). Reset on mood change.
+  const [historyDate, setHistoryDate] = useState(null);
+  const snapshotHistory = useQuery(
+    api.snapshots.history,
+    selectedMood ? { moodId: selectedMood, limit: 7 } : 'skip'
+  );
+
   // Resolve effective state: Convex wins when signed in and loaded
   const themeName =
     isAuthenticated && prefs?.theme ? prefs.theme : localTheme;
@@ -60,8 +67,8 @@ export default function App() {
 
   const t = THEMES[themeName] ?? THEMES.dark;
 
-  // Fetch movies from TMDB based on the selected mood
-  const { movies, loading, error } = useMovies(selectedMood);
+  // Fetch movies: Convex daily snapshot first, live TMDB fallback
+  const { movies, loading, error, source, date } = useMovies(selectedMood, historyDate);
 
   // Filter out watched/excluded movies
   const filteredMovies = movies.filter((m) => !excludedSet.has(m.id));
@@ -82,6 +89,7 @@ export default function App() {
   const handleMoodSelect = useCallback(
     (moodId) => {
       setLocalMood(moodId);
+      setHistoryDate(null); // back to latest snapshot for the new mood
       if (isAuthenticated) {
         setPrefs({ lastMood: moodId }).catch(() => {});
         logMood({ moodId }).catch(() => {});
@@ -237,6 +245,10 @@ export default function App() {
           apiReady={apiReady}
           favoriteIds={favoriteIds}
           onToggleFavorite={handleToggleFavorite}
+          source={source}
+          activeDate={date}
+          history={snapshotHistory ?? []}
+          onSelectDate={setHistoryDate}
         />
       )}
 

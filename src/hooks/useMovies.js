@@ -1,23 +1,25 @@
 // ---------------------------------------------------------------------------
-// useMovies — Custom React Hook
+// useMovies — Custom React Hook (Convex snapshots first, live TMDB fallback)
 // ---------------------------------------------------------------------------
-// HOW CUSTOM HOOKS WORK:
-// A custom hook is a function that starts with "use" and can call other
-// React hooks (useState, useEffect, etc.). It lets you extract reusable
-// logic from components.
-//
-// This hook takes a mood ID and returns { movies, loading, error }.
-// Whenever the mood changes, it automatically fetches new movies.
+// 1. Tries the server-side daily snapshot for (moodId, date) from Convex.
+//    Snapshots are written by the midnight cron, so every visitor sees the
+//    same "today's picks" instantly with no TMDB call.
+// 2. If no snapshot exists for that day, falls back to a live TMDB fetch
+//    with the date-seeded page rotation + shuffle (same as before).
 // ---------------------------------------------------------------------------
 
 import { useState, useEffect } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { getTrending, discoverByGenre } from '../services/tmdb';
 import { MOODS } from '../config/moods';
 
-// --- Daily rotation helpers -----------------------------------------------
-// Picks change every calendar day: the TMDB page cycles 1..5 by day-of-year
-// and results are shuffled with a seed derived from the date (YYYYMMDD),
-// so every day shows a different 12-movie set for the same mood.
+/** Today's date in UTC (YYYY-MM-DD) — matches the cron's snapshot dates. */
+export function utcToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// --- Daily rotation helpers (live-fallback path only) ---------------------
 
 function daySeed(d = new Date()) {
   return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
@@ -48,37 +50,48 @@ function shuffleSeeded(arr, seed) {
 }
 
 /**
- * Fetches movies based on the selected mood.
+ * Fetches movies for a mood.
  *
- * @param {string|null} moodId - The selected mood ID (e.g., 'cozy', 'hyped')
- * @returns {{ movies: object[], loading: boolean, error: string|null }}
+ * @param {string|null} moodId - Selected mood ID (e.g., 'cozy')
+ * @param {string|null} date - Snapshot date YYYY-MM-DD (defaults to today UTC)
+ * @returns {{ movies: object[], loading: boolean, error: string|null,
+ *            source: 'none'|'snapshot'|'live', date: string }}
  */
-export function useMovies(moodId) {
-  const [movies, setMovies] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+export function useMovies(moodId, date = null) {
+  const effDate = date ?? utcToday();
 
-  // useEffect runs whenever `moodId` changes
+  // Snapshot path: undefined = loading, null = missing, array = hit
+  const snapshot = useQuery(
+    api.snapshots.get,
+    moodId ? { moodId, date: effDate } : 'skip'
+  );
+
+  // Live-fallback state
+  const [live, setLive] = useState({ movies: [], loading: false, error: null });
+  const [useLive, setUseLive] = useState(false);
+
+  // Reset fallback whenever the mood or date changes
   useEffect(() => {
-    // If no mood is selected, clear everything
-    if (!moodId) {
-      setMovies([]);
-      setLoading(false);
-      setError(null);
-      return;
-    }
+    setUseLive(false);
+    setLive({ movies: [], loading: false, error: null });
+  }, [moodId, effDate]);
 
-    // Find the mood config (genre IDs, sort order, etc.)
+  // No snapshot for this day → switch to live TMDB fetch
+  useEffect(() => {
+    if (snapshot === null && moodId) setUseLive(true);
+  }, [snapshot, moodId]);
+
+  // Live TMDB fetch (only when the snapshot is missing)
+  useEffect(() => {
+    if (!useLive || !moodId) return;
+
     const mood = MOODS.find((m) => m.id === moodId);
     if (!mood) return;
 
-    // This flag prevents updating state if the component unmounts
-    // or if the user switches moods before the fetch completes
     let cancelled = false;
 
     async function fetchMovies() {
-      setLoading(true);
-      setError(null);
+      setLive((s) => ({ ...s, loading: true, error: null }));
 
       try {
         let data;
@@ -88,10 +101,8 @@ export function useMovies(moodId) {
         const page = (dayOfYear(today) % 5) + 1;
 
         if (mood.useTrending) {
-          // "Bored, surprise me" — use trending movies instead of genres
           data = await getTrending('week', page);
         } else {
-          // Normal mood — discover movies by genre
           data = await discoverByGenre(mood.genreIds, {
             sortBy: mood.sortBy,
             voteCountMin: mood.voteCountMin,
@@ -101,28 +112,34 @@ export function useMovies(moodId) {
         }
 
         if (!cancelled) {
-          // Only keep movies that have a poster (no placeholder images),
-          // then shuffle with today's date as seed and show up to 12
           const withPosters = data.results.filter((m) => m.poster_path);
           const shuffled = shuffleSeeded(withPosters, daySeed(today));
-          setMovies(shuffled.slice(0, 12)); // Show up to 12 movies
-          setLoading(false);
+          setLive({ movies: shuffled.slice(0, 12), loading: false, error: null });
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err.message);
-          setLoading(false);
+          setLive({ movies: [], loading: false, error: err.message });
         }
       }
     }
 
     fetchMovies();
 
-    // Cleanup function — runs if mood changes before fetch completes
     return () => {
       cancelled = true;
     };
-  }, [moodId]); // Re-run whenever moodId changes
+  }, [useLive, moodId]);
 
-  return { movies, loading, error };
+  if (!moodId) {
+    return { movies: [], loading: false, error: null, source: 'none', date: effDate };
+  }
+
+  if (!useLive) {
+    if (snapshot === undefined) {
+      return { movies: [], loading: true, error: null, source: 'snapshot', date: effDate };
+    }
+    return { movies: snapshot, loading: false, error: null, source: 'snapshot', date: effDate };
+  }
+
+  return { ...live, source: 'live', date: effDate };
 }
