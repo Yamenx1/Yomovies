@@ -4,30 +4,51 @@ import { ConvexReactClient } from 'convex/react';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import ErrorBoundary from './components/ErrorBoundary';
 
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+function bootstrap() {
+  const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-if (!PUBLISHABLE_KEY) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY — run `clerk env pull` to sync Clerk keys');
+  if (!PUBLISHABLE_KEY) {
+    throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY — run `clerk env pull` to sync Clerk keys');
+  }
+
+  const CONVEX_URL = import.meta.env.VITE_CONVEX_URL;
+
+  if (!CONVEX_URL) {
+    throw new Error('Missing VITE_CONVEX_URL — run `npx convex dev` to sync Convex URL');
+  }
+
+  const convex = new ConvexReactClient(CONVEX_URL);
+
+  // ClerkProvider wraps the entire app so every component
+  // can access Clerk auth; ConvexProviderWithClerk bridges
+  // Clerk session tokens into Convex (ctx.auth) calls.
+  // ErrorBoundary turns any startup/render crash into a readable message.
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+          <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+            <App />
+          </ConvexProviderWithClerk>
+        </ClerkProvider>
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
 }
 
-const CONVEX_URL = import.meta.env.VITE_CONVEX_URL;
-
-if (!CONVEX_URL) {
-  throw new Error('Missing VITE_CONVEX_URL — run `npx convex dev` to sync Convex URL');
+try {
+  bootstrap();
+} catch (error) {
+  // eslint-disable-next-line no-console
+  console.error('YoMovies failed to start:', error);
+  const safe = String(error?.message ?? error)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;');
+  document.getElementById('root').innerHTML =
+    `<div style="min-height:100vh;background:#151A24;color:#f5f0e8;font-family:Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px">` +
+    `<div style="max-width:560px"><h1 style="font-size:20px">😕 YoMovies failed to start</h1>` +
+    `<pre style="background:#00000055;border:1px solid #ffffff22;border-radius:8px;padding:12px;font-size:13px;white-space:pre-wrap;word-break:break-word">${safe}</pre>` +
+    `<p style="font-size:13px;opacity:.7">Screenshot this and send it over — it says exactly what's missing.</p></div></div>`;
 }
-
-const convex = new ConvexReactClient(CONVEX_URL);
-
-// ClerkProvider wraps the entire app so every component
-// can access Clerk auth; ConvexProviderWithClerk bridges
-// Clerk session tokens into Convex (ctx.auth) calls.
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
-      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-        <App />
-      </ConvexProviderWithClerk>
-    </ClerkProvider>
-  </React.StrictMode>
-);
