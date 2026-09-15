@@ -46,19 +46,21 @@ export default function App() {
 
   // Opened movie (details overlay). Null = grid view.
   const [selectedMovie, setSelectedMovie] = useState(null);
-  const snapshotHistory = useQuery(
-    api.snapshots.history,
-    selectedMood ? { moodId: selectedMood, limit: 7 } : 'skip'
-  );
 
   // Resolve effective state: Convex wins when signed in and loaded.
   // (Empty-string lastMood means "back at the main menu" — see handleHome.)
+  // NOTE: selectedMood must be defined before any hook that reads it.
   const themeName =
     isAuthenticated && prefs?.theme ? prefs.theme : localTheme;
   const selectedMood =
     isAuthenticated && prefs !== undefined
       ? (prefs?.lastMood || localMood)
       : localMood;
+
+  const snapshotHistory = useQuery(
+    api.snapshots.history,
+    selectedMood ? { moodId: selectedMood, limit: 7 } : 'skip'
+  );
 
   const excludedSet =
     isAuthenticated && watchedList
