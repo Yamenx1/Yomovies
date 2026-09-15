@@ -85,8 +85,8 @@ export function getImageUrl(path, size = 'w500') {
  * @param {string} timeWindow - 'day' or 'week'
  * @returns {Promise<object>} - { results: [...movies], total_pages, ... }
  */
-export async function getTrending(timeWindow = 'day') {
-  return fetchFromTMDB(`/trending/movie/${timeWindow}`);
+export async function getTrending(timeWindow = 'day', page = 1) {
+  return fetchFromTMDB(`/trending/movie/${timeWindow}`, { page });
 }
 
 /**

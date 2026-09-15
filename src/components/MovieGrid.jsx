@@ -23,6 +23,10 @@ export default function MovieGrid({
   favoriteIds,
   onToggleFavorite,
 }) {
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px 80px' }}>
       {/* Mood blurb + reset button */}
@@ -40,6 +44,18 @@ export default function MovieGrid({
           <Sparkles size={13} style={{ verticalAlign: -2, marginRight: 6 }} />
           For when you're feeling {activeMood.label.toLowerCase()} — {activeMood.blurb}
         </p>
+        <span
+          style={{
+            background: `${t.accent}18`,
+            color: t.accent,
+            fontSize: 11.5,
+            padding: '3px 10px',
+            borderRadius: 999,
+            fontWeight: 600,
+          }}
+        >
+          Fresh picks · {todayLabel}
+        </span>
         {excludedCount > 0 && (
           <button
             onClick={onClearExcluded}

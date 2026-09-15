@@ -14,6 +14,39 @@ import { useState, useEffect } from 'react';
 import { getTrending, discoverByGenre } from '../services/tmdb';
 import { MOODS } from '../config/moods';
 
+// --- Daily rotation helpers -----------------------------------------------
+// Picks change every calendar day: the TMDB page cycles 1..5 by day-of-year
+// and results are shuffled with a seed derived from the date (YYYYMMDD),
+// so every day shows a different 12-movie set for the same mood.
+
+function daySeed(d = new Date()) {
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+function dayOfYear(d = new Date()) {
+  return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+}
+
+function mulberry32(a) {
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleSeeded(arr, seed) {
+  const out = [...arr];
+  const rand = mulberry32(seed);
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 /**
  * Fetches movies based on the selected mood.
  *
@@ -50,22 +83,29 @@ export function useMovies(moodId) {
       try {
         let data;
 
+        // Rotate the result page every day so picks feel fresh daily
+        const today = new Date();
+        const page = (dayOfYear(today) % 5) + 1;
+
         if (mood.useTrending) {
           // "Bored, surprise me" — use trending movies instead of genres
-          data = await getTrending('week');
+          data = await getTrending('week', page);
         } else {
           // Normal mood — discover movies by genre
           data = await discoverByGenre(mood.genreIds, {
             sortBy: mood.sortBy,
             voteCountMin: mood.voteCountMin,
             releaseBefore: mood.releaseDateBefore || '',
+            page,
           });
         }
 
         if (!cancelled) {
-          // Only keep movies that have a poster (no placeholder images)
+          // Only keep movies that have a poster (no placeholder images),
+          // then shuffle with today's date as seed and show up to 12
           const withPosters = data.results.filter((m) => m.poster_path);
-          setMovies(withPosters.slice(0, 12)); // Show up to 12 movies
+          const shuffled = shuffleSeeded(withPosters, daySeed(today));
+          setMovies(shuffled.slice(0, 12)); // Show up to 12 movies
           setLoading(false);
         }
       } catch (err) {
