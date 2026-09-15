@@ -14,7 +14,6 @@ const MOODS = [
   { id: "nostalgic", genreIds: [18, 10751], sortBy: "vote_average.desc", voteCountMin: 200, releaseDateBefore: "2005-12-31" },
   { id: "mindbend", genreIds: [878, 9648, 53], sortBy: "vote_average.desc", voteCountMin: 200 },
   { id: "angry", genreIds: [28, 80, 53], sortBy: "popularity.desc", voteCountMin: 200 },
-  { id: "bored", genreIds: [], sortBy: "popularity.desc", voteCountMin: 50, useTrending: true },
 ];
 
 const BASE_URL = "https://api.themoviedb.org/3";
@@ -55,38 +54,48 @@ export const fetchAndStore = internalAction({
     if (!apiKey) throw new Error("Missing TMDB_API_KEY env var");
     const now = new Date();
     const date = now.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
-    // Rotate page + shuffle seed daily so snapshots visibly change day to day
-    const page = (dayOfYearUTC(now) % 5) + 1;
+    // Rotate pages daily so snapshots visibly change day to day.
+    // 3 pages per mood form the day's pool — clients deal a random
+    // 20 from it on every page load.
+    const basePage = (dayOfYearUTC(now) % 5) + 1;
     const seed = Number(date.replaceAll("-", ""));
     const rand = mulberry32(seed);
 
     for (const mood of MOODS) {
-      let data;
-      if (mood.useTrending) {
-        data = await tmdb("/trending/movie/week", {
-          api_key: apiKey,
-          language: "en-US",
-          page,
-        });
-      } else {
-        data = await tmdb("/discover/movie", {
-          api_key: apiKey,
-          language: "en-US",
-          with_genres: mood.genreIds.join("|"),
-          sort_by: mood.sortBy,
-          "vote_count.gte": mood.voteCountMin,
-          "release_date.lte": mood.releaseDateBefore ?? "",
-          page,
-        });
+      // Gather up to 3 pages, then dedupe by TMDB id
+      const seen = new Map();
+      for (let p = 0; p < 3; p++) {
+        const page = ((basePage - 1 + p) % 5) + 1;
+        let data;
+        if (mood.useTrending) {
+          data = await tmdb("/trending/movie/week", {
+            api_key: apiKey,
+            language: "en-US",
+            page,
+          });
+        } else {
+          data = await tmdb("/discover/movie", {
+            api_key: apiKey,
+            language: "en-US",
+            with_genres: mood.genreIds.join("|"),
+            sort_by: mood.sortBy,
+            "vote_count.gte": mood.voteCountMin,
+            "release_date.lte": mood.releaseDateBefore ?? "",
+            page,
+          });
+        }
+        for (const m of data.results ?? []) {
+          if (m.poster_path && !seen.has(m.id)) seen.set(m.id, m);
+        }
       }
-      const withPosters = (data.results ?? []).filter((m) => m.poster_path);
-      // Seeded shuffle, then take 12
+      const withPosters = [...seen.values()];
+      // Seeded shuffle, then store the pool (up to 60)
       const shuffled = [...withPosters];
       for (let i = shuffled.length - 1; i > 0; i--) {
         const j = Math.floor(rand() * (i + 1));
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
-      const movies = shuffled.slice(0, 24).map((m) => ({
+      const movies = shuffled.slice(0, 60).map((m) => ({
         id: m.id,
         title: m.title,
         poster_path: m.poster_path ?? undefined,

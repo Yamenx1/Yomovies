@@ -86,15 +86,6 @@ export const MOODS = [
     sortBy: 'popularity.desc',
     voteCountMin: 200,
   },
-  {
-    id: 'bored',
-    label: 'Bored, surprise me',
-    blurb: 'weird, unexpected, cult favorite',
-    genreIds: [],                     // Uses trending endpoint instead
-    sortBy: 'popularity.desc',
-    voteCountMin: 50,
-    useTrending: true,                // Flag to use trending API
-  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -113,7 +104,6 @@ export const KEYWORDS = {
   nostalgic: ['nostalgic', 'nostalgia', 'childhood', 'memory', 'throwback'],
   mindbend: ['confused', 'think', 'smart', 'twist', 'mind', 'philosophical', 'weird plot'],
   angry: ['angry', 'mad', 'furious', 'pissed', 'rage', 'frustrated'],
-  bored: ['bored', 'surprise', 'random', 'different', 'unusual'],
 };
 
 /**

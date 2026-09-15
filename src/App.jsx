@@ -83,9 +83,14 @@ export default function App() {
 
   const t = THEMES[themeName] ?? THEMES.dark;
 
+  // Moods can be removed over time — ignore persisted ids with no config
+  // (e.g. users who saved 'bored' before it was retired)
+  const knownMood = selectedMood == null || MOODS.some((m) => m.id === selectedMood);
+  const effectiveMood = knownMood ? selectedMood : null;
+
   // Fetch movies: Convex daily snapshot first, live TMDB fallback.
   // Surprise mode bypasses moods entirely with random trending picks.
-  const moodResult = useMovies(surpriseSeed != null ? null : selectedMood, historyDate);
+  const moodResult = useMovies(surpriseSeed != null ? null : effectiveMood, historyDate);
   const isSurprise = surpriseSeed != null;
   const movies = isSurprise ? surprise.movies : moodResult.movies;
   const loading = isSurprise ? surprise.loading : moodResult.loading;
@@ -266,7 +271,7 @@ export default function App() {
       )}
 
       {/* Film-strip divider */}
-      {(selectedMood || isSurprise) && (
+      {(effectiveMood || isSurprise) && (
         <div
           style={{
             width: '100%',
@@ -279,7 +284,7 @@ export default function App() {
       )}
 
       {/* Movie results */}
-      {(selectedMood || isSurprise) && (
+      {(effectiveMood || isSurprise) && (
         <MovieGrid
           t={t}
           movies={filteredMovies}

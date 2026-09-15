@@ -21,10 +21,6 @@ export function utcToday() {
 
 // --- Daily rotation helpers (live-fallback path only) ---------------------
 
-function daySeed(d = new Date()) {
-  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
-}
-
 function dayOfYear(d = new Date()) {
   return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
 }
@@ -59,6 +55,10 @@ function shuffleSeeded(arr, seed) {
  */
 export function useMovies(moodId, date = null) {
   const effDate = date ?? utcToday();
+
+  // Fresh random seed per page load — every refresh deals a new mix
+  // from the day's pool (snapshot or live results alike)
+  const [loadSeed] = useState(() => Math.floor(Math.random() * 1e9));
 
   // Snapshot path: undefined = loading, null = missing, array = hit
   const snapshot = useQuery(
@@ -113,8 +113,8 @@ export function useMovies(moodId, date = null) {
 
         if (!cancelled) {
           const withPosters = data.results.filter((m) => m.poster_path);
-          const shuffled = shuffleSeeded(withPosters, daySeed(today));
-          setLive({ movies: shuffled.slice(0, 24), loading: false, error: null });
+          const shuffled = shuffleSeeded(withPosters, loadSeed);
+          setLive({ movies: shuffled.slice(0, 20), loading: false, error: null });
         }
       } catch (err) {
         if (!cancelled) {
@@ -138,7 +138,14 @@ export function useMovies(moodId, date = null) {
     if (snapshot === undefined) {
       return { movies: [], loading: true, error: null, source: 'snapshot', date: effDate };
     }
-    return { movies: snapshot, loading: false, error: null, source: 'snapshot', date: effDate };
+    // Deal a random 20 from the day's pool on every page load
+    return {
+      movies: shuffleSeeded(snapshot, loadSeed).slice(0, 20),
+      loading: false,
+      error: null,
+      source: 'snapshot',
+      date: effDate,
+    };
   }
 
   return { ...live, source: 'live', date: effDate };

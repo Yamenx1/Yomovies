@@ -14,7 +14,6 @@ const MOODS = [
   { id: "nostalgic", label: "Feeling nostalgic", hint: "warm memory, coming-of-age, older films" },
   { id: "mindbend", label: "Want my mind bent", hint: "twisty, strange, thought-provoking" },
   { id: "angry", label: "Need to let off steam", hint: "sharp, cathartic, a little vicious" },
-  { id: "bored", label: "Bored, surprise me", hint: "weird, unexpected, cult favorite" },
 ];
 
 export const detectMood = action({
