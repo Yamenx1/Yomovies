@@ -11,6 +11,7 @@
 import type * as activity from "../activity.js";
 import type * as crons from "../crons.js";
 import type * as favorites from "../favorites.js";
+import type * as moodAi from "../moodAi.js";
 import type * as preferences from "../preferences.js";
 import type * as snapshots from "../snapshots.js";
 import type * as watched from "../watched.js";
@@ -25,6 +26,7 @@ declare const fullApi: ApiFromModules<{
   activity: typeof activity;
   crons: typeof crons;
   favorites: typeof favorites;
+  moodAi: typeof moodAi;
   preferences: typeof preferences;
   snapshots: typeof snapshots;
   watched: typeof watched;

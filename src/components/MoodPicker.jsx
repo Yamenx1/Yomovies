@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Shuffle } from 'lucide-react';
+import { Shuffle, Sparkles } from 'lucide-react';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { MOODS, matchMoodFromText } from '../config/moods';
 
 /**
  * MoodPicker — The hero section with:
  * 1. Headline
- * 2. Text input for free-text mood description
+ * 2. AI text input: Gemini (via a Convex action, key stays server-side)
+ *    reads the feeling, then keyword matching backs it up offline
  * 3. Mood buttons grid
  * 4. "Surprise me" button
  *
@@ -14,15 +17,39 @@ import { MOODS, matchMoodFromText } from '../config/moods';
 export default function MoodPicker({ t, selectedMood, onMoodSelect, apiReady }) {
   const [freeText, setFreeText] = useState('');
   const [noMatch, setNoMatch] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiNote, setAiNote] = useState(null);
+  const detectMood = useAction(api.moodAi.detectMood);
 
-  function handleTextSubmit(e) {
+  async function handleTextSubmit(e) {
     e.preventDefault();
-    if (!freeText.trim()) return;
+    const text = freeText.trim();
+    if (!text || aiLoading) return;
+    setNoMatch(false);
+    setAiNote(null);
 
-    const matched = matchMoodFromText(freeText);
+    // 1. Ask Gemini first (server-side action — API key never hits the browser)
+    setAiLoading(true);
+    try {
+      const ai = await detectMood({ text });
+      if (ai?.moodId) {
+        onMoodSelect(ai.moodId);
+        setAiNote(
+          `✨ ${ai.reason ?? 'Picked for you'}` +
+            (typeof ai.confidence === 'number' ? ` (${ai.confidence}%)` : '')
+        );
+        return;
+      }
+    } catch {
+      // AI unreachable — fall through to keywords below
+    } finally {
+      setAiLoading(false);
+    }
+
+    // 2. Keyword fallback (also covers AI downtime)
+    const matched = matchMoodFromText(text);
     if (matched) {
       onMoodSelect(matched);
-      setNoMatch(false);
     } else {
       setNoMatch(true);
       onMoodSelect(null);
@@ -31,6 +58,7 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, apiReady }) 
 
   function pickMood(id) {
     setNoMatch(false);
+    setAiNote(null);
     setFreeText('');
     onMoodSelect(id);
   }
@@ -110,6 +138,7 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, apiReady }) 
         />
         <button
           type="submit"
+          disabled={aiLoading}
           style={{
             background: t.accent,
             color: '#151A24',
@@ -118,12 +147,30 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, apiReady }) 
             padding: '0 20px',
             fontWeight: 600,
             fontSize: 15,
-            cursor: 'pointer',
+            cursor: aiLoading ? 'wait' : 'pointer',
+            opacity: aiLoading ? 0.7 : 1,
           }}
         >
-          Find movies
+          {aiLoading ? 'Reading…' : 'Find movies'}
         </button>
       </form>
+
+      {aiNote && (
+        <p
+          style={{
+            color: t.accent,
+            fontSize: 13.5,
+            marginTop: -16,
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
+          <Sparkles size={13} /> {aiNote}
+        </p>
+      )}
 
       {noMatch && (
         <p style={{ color: t.muted, fontSize: 14, marginTop: -16, marginBottom: 20 }}>
