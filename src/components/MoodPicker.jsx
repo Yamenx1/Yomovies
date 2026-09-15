@@ -14,7 +14,7 @@ import { MOODS, matchMoodFromText } from '../config/moods';
  *
  * Also shows an API key warning if TMDB isn't configured yet.
  */
-export default function MoodPicker({ t, selectedMood, onMoodSelect, apiReady }) {
+export default function MoodPicker({ t, selectedMood, onMoodSelect, onSurprise, apiReady }) {
   const [freeText, setFreeText] = useState('');
   const [noMatch, setNoMatch] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -64,8 +64,11 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, apiReady }) 
   }
 
   function surpriseMe() {
-    const randomMood = MOODS[Math.floor(Math.random() * MOODS.length)];
-    pickMood(randomMood.id);
+    setNoMatch(false);
+    setAiNote(null);
+    setFreeText('');
+    // True random movies (handled by the parent) — not a random mood
+    if (onSurprise) onSurprise();
   }
 
   return (

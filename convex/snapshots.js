@@ -86,7 +86,7 @@ export const fetchAndStore = internalAction({
         const j = Math.floor(rand() * (i + 1));
         [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
       }
-      const movies = shuffled.slice(0, 12).map((m) => ({
+      const movies = shuffled.slice(0, 24).map((m) => ({
         id: m.id,
         title: m.title,
         poster_path: m.poster_path ?? undefined,

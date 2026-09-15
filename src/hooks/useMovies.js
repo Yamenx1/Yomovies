@@ -114,7 +114,7 @@ export function useMovies(moodId, date = null) {
         if (!cancelled) {
           const withPosters = data.results.filter((m) => m.poster_path);
           const shuffled = shuffleSeeded(withPosters, daySeed(today));
-          setLive({ movies: shuffled.slice(0, 12), loading: false, error: null });
+          setLive({ movies: shuffled.slice(0, 24), loading: false, error: null });
         }
       } catch (err) {
         if (!cancelled) {
@@ -142,4 +142,44 @@ export function useMovies(moodId, date = null) {
   }
 
   return { ...live, source: 'live', date: effDate };
+}
+
+/**
+ * Totally random movies — ignores moods. Pulls a random trending page and
+ * shuffles it with the given seed, so every "Surprise me" click deals a
+ * fresh hand. Pass seed=null for idle.
+ */
+export function useSurpriseMovies(seed) {
+  const [state, setState] = useState({ movies: [], loading: false, error: null });
+
+  useEffect(() => {
+    if (seed == null) {
+      setState({ movies: [], loading: false, error: null });
+      return;
+    }
+    let cancelled = false;
+    setState({ movies: [], loading: true, error: null });
+
+    // Random page each time (TMDB trending has plenty of pages)
+    const page = 1 + Math.floor(Math.random() * 10);
+    getTrending('week', page)
+      .then((data) => {
+        if (cancelled) return;
+        const withPosters = (data.results ?? []).filter((m) => m.poster_path);
+        setState({
+          movies: shuffleSeeded(withPosters, seed).slice(0, 24),
+          loading: false,
+          error: null,
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) setState({ movies: [], loading: false, error: err.message });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [seed]);
+
+  return state;
 }
