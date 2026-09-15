@@ -7,7 +7,7 @@ import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
  * When signed out: shows "Sign In" and "Sign Up" buttons (Clerk modals)
  * When signed in: shows Clerk UserButton
  */
-export default function Header({ theme, t, onToggleTheme }) {
+export default function Header({ theme, t, onToggleTheme, onHome }) {
   return (
     <>
       <header
@@ -20,8 +20,17 @@ export default function Header({ theme, t, onToggleTheme }) {
           padding: '24px 20px 0',
         }}
       >
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Logo — click to go back to the main menu */}
+        <div
+          onClick={onHome}
+          title="Back to main menu"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            cursor: onHome ? 'pointer' : 'default',
+          }}
+        >
           <img
             src={t.logo}
             alt="Yo Movies logo"

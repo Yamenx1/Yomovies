@@ -134,6 +134,16 @@ export async function getMovieDetails(movieId) {
 }
 
 /**
+ * Get cast & crew for a single movie.
+ *
+ * @param {number} movieId - TMDB movie ID
+ * @returns {Promise<object>} - { cast: [...], crew: [...] }
+ */
+export async function getMovieCredits(movieId) {
+  return fetchFromTMDB(`/movie/${movieId}/credits`);
+}
+
+/**
  * Search movies by title.
  *
  * @param {string} query - Search query

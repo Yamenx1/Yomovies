@@ -22,6 +22,7 @@ export default function MovieGrid({
   apiReady,
   favoriteIds,
   onToggleFavorite,
+  onSelect,
   source,
   activeDate,
   history,
@@ -67,7 +68,7 @@ export default function MovieGrid({
             ? `Daily picks · ${formatDay(activeDate)}`
             : `Live picks · ${todayLabel}`}
         </span>
-        {history.length > 1 && (
+        {history.length >= 1 && (
           <select
             value={activeDate}
             onChange={(e) => onSelectDate(e.target.value)}
@@ -157,6 +158,7 @@ export default function MovieGrid({
               onExclude={onExclude}
               isFavorite={favoriteIds?.has(movie.id)}
               onToggleFavorite={onToggleFavorite}
+              onSelect={onSelect}
             />
           ))}
         </div>

@@ -2,7 +2,7 @@ import { Star, Heart } from 'lucide-react';
 import { getImageUrl } from '../services/tmdb';
 
 // TMDB genre ID → readable name mapping
-const GENRE_MAP = {
+export const GENRE_MAP = {
   28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy',
   80: 'Crime', 99: 'Documentary', 18: 'Drama', 10751: 'Family',
   14: 'Fantasy', 36: 'History', 27: 'Horror', 10402: 'Music',
@@ -23,7 +23,7 @@ const GENRE_MAP = {
  * We combine it with their image CDN to get the full URL:
  * https://image.tmdb.org/t/p/w500/abc123.jpg
  */
-export default function MovieCard({ movie, t, index, onExclude, isFavorite, onToggleFavorite }) {
+export default function MovieCard({ movie, t, index, onExclude, isFavorite, onToggleFavorite, onSelect }) {
   const posterUrl = getImageUrl(movie.poster_path, 'w342');
   const year = movie.release_date ? new Date(movie.release_date).getFullYear() : '—';
   const rating = movie.vote_average ? movie.vote_average.toFixed(1) : '—';
@@ -42,6 +42,8 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
   return (
     <div
       className="card"
+      onClick={() => onSelect?.(movie)}
+      title={`View details for ${movie.title}`}
       style={{
         background: t.surface,
         border: `1px solid ${t.border}`,
@@ -50,6 +52,7 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
         display: 'flex',
         flexDirection: 'column',
         transition: 'border-color 0.2s ease',
+        cursor: onSelect ? 'pointer' : 'default',
       }}
     >
       {/* Poster */}
@@ -159,7 +162,10 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
       {/* Favorite button (persisted in Convex when signed in) */}
       {onToggleFavorite && (
         <button
-          onClick={() => onToggleFavorite(movie)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFavorite(movie);
+          }}
           aria-label={isFavorite ? `Remove ${movie.title} from favorites` : `Save ${movie.title} to favorites`}
           title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
           style={{
@@ -188,7 +194,10 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
       {/* Exclude button (already seen) */}
       <button
         className="exclude-btn"
-        onClick={() => onExclude(movie)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onExclude(movie);
+        }}
         aria-label={`Already seen ${movie.title} — exclude it`}
         title="Already seen this — exclude it"
         style={{

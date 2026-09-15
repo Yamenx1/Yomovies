@@ -18,6 +18,7 @@ import { useMovies } from './hooks/useMovies';
 import Header from './components/Header';
 import MoodPicker from './components/MoodPicker';
 import MovieGrid from './components/MovieGrid';
+import MovieDetails from './components/MovieDetails';
 
 export default function App() {
   const { isAuthenticated } = useConvexAuth();
@@ -42,17 +43,21 @@ export default function App() {
 
   // Snapshot day being viewed (null = latest). Reset on mood change.
   const [historyDate, setHistoryDate] = useState(null);
+
+  // Opened movie (details overlay). Null = grid view.
+  const [selectedMovie, setSelectedMovie] = useState(null);
   const snapshotHistory = useQuery(
     api.snapshots.history,
     selectedMood ? { moodId: selectedMood, limit: 7 } : 'skip'
   );
 
-  // Resolve effective state: Convex wins when signed in and loaded
+  // Resolve effective state: Convex wins when signed in and loaded.
+  // (Empty-string lastMood means "back at the main menu" — see handleHome.)
   const themeName =
     isAuthenticated && prefs?.theme ? prefs.theme : localTheme;
   const selectedMood =
     isAuthenticated && prefs !== undefined
-      ? (prefs?.lastMood ?? localMood)
+      ? (prefs?.lastMood || localMood)
       : localMood;
 
   const excludedSet =
@@ -90,6 +95,7 @@ export default function App() {
     (moodId) => {
       setLocalMood(moodId);
       setHistoryDate(null); // back to latest snapshot for the new mood
+      setSelectedMovie(null); // close any open details
       if (isAuthenticated) {
         setPrefs({ lastMood: moodId }).catch(() => {});
         logMood({ moodId }).catch(() => {});
@@ -97,6 +103,15 @@ export default function App() {
     },
     [isAuthenticated, setPrefs, logMood]
   );
+
+  // Logo / site name → back to the main menu
+  const handleHome = useCallback(() => {
+    setLocalMood(null);
+    setHistoryDate(null);
+    setSelectedMovie(null);
+    // Empty string clears the persisted mood (see selectedMood above)
+    if (isAuthenticated) setPrefs({ lastMood: '' }).catch(() => {});
+  }, [isAuthenticated, setPrefs]);
 
   const handleExclude = useCallback(
     (movie) => {
@@ -184,7 +199,7 @@ export default function App() {
         img { user-select: none; -webkit-user-drag: none; }
       `}</style>
 
-      <Header theme={themeName} t={t} onToggleTheme={toggleTheme} />
+      <Header theme={themeName} t={t} onToggleTheme={toggleTheme} onHome={handleHome} />
 
       <MoodPicker
         t={t}
@@ -249,6 +264,16 @@ export default function App() {
           activeDate={date}
           history={snapshotHistory ?? []}
           onSelectDate={setHistoryDate}
+          onSelect={setSelectedMovie}
+        />
+      )}
+
+      {/* Details overlay */}
+      {selectedMovie && (
+        <MovieDetails
+          movie={selectedMovie}
+          t={t}
+          onClose={() => setSelectedMovie(null)}
         />
       )}
 
