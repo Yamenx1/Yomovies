@@ -7,11 +7,11 @@
 //   local state when signed out
 // ---------------------------------------------------------------------------
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import THEMES from './config/theme';
-import { isApiKeyConfigured } from './services/tmdb';
+import { isApiKeyConfigured, getTrending, getImageUrl } from './services/tmdb';
 import { useSurpriseMovies } from './hooks/useMovies';
 import Header from './components/Header';
 import MoodPicker from './components/MoodPicker';
@@ -50,6 +50,26 @@ export default function App() {
 
   // Favorites drawer (right slide-over)
   const [favOpen, setFavOpen] = useState(false);
+
+  // Poster wall for the landing backdrop (Netflix-style tilted collage).
+  // Real TMDB trending posters; falls back to the aurora if unavailable.
+  const [collage, setCollage] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getTrending('week', 1), getTrending('week', 2)])
+      .then(([a, b]) => {
+        if (cancelled) return;
+        const posters = [...(a.results ?? []), ...(b.results ?? [])]
+          .map((m) => m.poster_path)
+          .filter(Boolean)
+          .slice(0, 18);
+        setCollage(posters.map((p) => getImageUrl(p, 'w342')));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Cursor-reactive glow: writes CSS vars straight to the DOM node,
   // so the spotlight follows the mouse with zero React re-renders
@@ -287,9 +307,55 @@ export default function App() {
               }}
             />
           </div>
+        ) : collage.length > 0 ? (
+          /* Netflix-style tilted poster wall (landing state) */
+          <div style={{ position: 'absolute', inset: 0, animation: 'ambientIn 1.2s ease' }}>
+            <div
+              className="collage-pan"
+              style={{
+                position: 'absolute',
+                inset: '-12%',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(6, 1fr)',
+                gap: 14,
+                transform: 'rotate(-8deg) scale(1.15)',
+                animation: 'collagePan 70s ease-in-out infinite alternate',
+              }}
+            >
+              {collage.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt=""
+                  loading="lazy"
+                  draggable={false}
+                  style={{
+                    width: '100%',
+                    aspectRatio: '2 / 3',
+                    objectFit: 'cover',
+                    borderRadius: 10,
+                    opacity: 0.55,
+                  }}
+                />
+              ))}
+            </div>
+            {/* Dim wash so hero text stays readable */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background:
+                  themeName === 'dark'
+                    ? 'linear-gradient(rgba(21,26,36,0.62), rgba(21,26,36,0.88)),' +
+                      ' radial-gradient(ellipse 120% 100% at 50% 40%, transparent 30%, rgba(0,0,0,0.6) 100%)'
+                    : 'linear-gradient(rgba(245,243,238,0.78), rgba(245,243,238,0.95)),' +
+                      ' radial-gradient(ellipse 120% 100% at 50% 40%, transparent 40%, rgba(21,26,36,0.16) 100%)',
+              }}
+            />
+          </div>
         ) : (
           <>
-            {/* Drifting aurora blobs (idle / pre-search state) */}
+            {/* Drifting aurora blobs (fallback when posters unavailable) */}
             <div
               className="aurora-a"
               style={{
@@ -377,6 +443,10 @@ export default function App() {
           from { opacity: 0; }
           to { opacity: 1; }
         }
+        @keyframes collagePan {
+          from { transform: rotate(-8deg) scale(1.15) translate(0, 0); }
+          to { transform: rotate(-8deg) scale(1.15) translate(-2%, 2%); }
+        }
         .card {
           animation: rise 0.35s ease both;
           position: relative;
@@ -389,6 +459,7 @@ export default function App() {
         }
         @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
         @media (prefers-reduced-motion: reduce) { .aurora-a, .aurora-b { animation: none; } }
+        @media (prefers-reduced-motion: reduce) { .collage-pan { animation: none; } }
         input::placeholder { color: ${t.muted}; opacity: 0.8; }
         .exclude-btn { transition: opacity 0.15s ease, color 0.15s ease; opacity: 0.55; }
         .exclude-btn:hover { opacity: 1; color: ${t.accent}; }
