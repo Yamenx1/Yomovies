@@ -769,6 +769,7 @@ export default function App() {
           onToggleWatchlist={handleToggleWatchlist}
           onSelect={setSelectedMovie}
         />
+        </>
       )}
 
       {/* Details overlay */}
