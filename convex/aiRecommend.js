@@ -18,9 +18,10 @@ const movieValidator = v.object({
   genre_ids: v.array(v.number()),
 });
 
-async function tmdbSearch(apiKey, title, year) {
+async function tmdbSearch(apiKey, title, year, language = "en-US") {
   const tryFetch = async (params) => {
     const url = new URL(`${TMDB_BASE}/search/movie`);
+    url.searchParams.set("language", language);
     for (const [k, value] of Object.entries(params)) {
       if (value !== undefined && value !== null && value !== "") {
         url.searchParams.set(k, String(value));
@@ -43,10 +44,13 @@ async function tmdbSearch(apiKey, title, year) {
 }
 
 export const recommend = action({
-  args: { text: v.string() },
+  args: { text: v.string(), lang: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const query = args.text.trim().slice(0, 500);
     if (!query) throw new Error("Empty search");
+    // Arabic UI → Arabic overviews + Arabic reason line
+    const tmdbLang = args.lang === "ar" ? "ar-SA" : "en-US";
+    const reasonLang = args.lang === "ar" ? "Write the reason in Arabic." : "";
 
     // Exact-repeat cache (case-insensitive)
     const key = query.toLowerCase();
@@ -64,8 +68,12 @@ export const recommend = action({
     const prompt =
       `Recommend movies for someone's current feeling. The person says: "${query}"\n\n` +
       `Pick 12 REAL, well-known movies that fit — mix eras and styles, no repeats. ` +
+      `If they name an actor, director, or character owner (e.g. "DiCaprio", "Nolan films", "more like Dune"), ` +
+      `put that person's name in "person" — otherwise null. ` +
+      `${reasonLang} ` +
       `Output ONLY a JSON object and absolutely nothing else — no preamble, no markdown, no explanation: ` +
       `{"movies": [{"title": "<exact film title>", "year": <release year>}], ` +
+      `"person": "<name or null>", ` +
       `"reason": "<one short friendly line explaining the picks>"}`;
 
     const generationConfig = {
@@ -118,22 +126,61 @@ export const recommend = action({
     const picks = Array.isArray(parsed.movies) ? parsed.movies.slice(0, 12) : [];
     const movies = [];
     const seenIds = new Set();
+
+    const pushHit = (hit) => {
+      if (hit && !seenIds.has(hit.id) && movies.length < 12) {
+        seenIds.add(hit.id);
+        movies.push({
+          id: hit.id,
+          title: hit.title,
+          poster_path: hit.poster_path ?? undefined,
+          release_date: hit.release_date ?? undefined,
+          vote_average: hit.vote_average ?? undefined,
+          overview: hit.overview ?? undefined,
+          genre_ids: hit.genre_ids ?? [],
+        });
+      }
+    };
+
+    // Person-led half: top films starring/directed by the named person
+    let personName = null;
+    if (typeof parsed.person === "string" && parsed.person.trim().length > 1) {
+      try {
+          const url = new URL(`${TMDB_BASE}/search/person`);
+          url.searchParams.set("api_key", tmdbKey);
+          url.searchParams.set("language", tmdbLang);
+          url.searchParams.set("query", parsed.person.trim());
+        const pres = await fetch(url);
+        if (pres.ok) {
+          const pdata = await pres.json();
+          const person = (pdata.results ?? [])[0];
+          if (person) {
+            personName = person.name;
+            const durl = new URL(`${TMDB_BASE}/discover/movie`);
+            durl.searchParams.set("api_key", tmdbKey);
+            durl.searchParams.set("language", tmdbLang);
+            durl.searchParams.set("with_cast", String(person.id));
+            durl.searchParams.set("sort_by", "popularity.desc");
+            durl.searchParams.set("vote_count.gte", "50");
+            const dres = await fetch(durl);
+            if (dres.ok) {
+              const ddata = await dres.json();
+              for (const m of ddata.results ?? []) {
+                if (m.poster_path && movies.length < 6) pushHit(m);
+              }
+            }
+          }
+        }
+      } catch {
+        // Person lookup is best-effort — AI title picks still stand
+      }
+    }
+
     for (const pick of picks) {
       if (!pick?.title || movies.length >= 12) continue;
       try {
-        const hit = await tmdbSearch(tmdbKey, pick.title, pick.year);
-        if (hit && !seenIds.has(hit.id)) {
-          seenIds.add(hit.id);
-          movies.push({
-            id: hit.id,
-            title: hit.title,
-            poster_path: hit.poster_path ?? undefined,
-            release_date: hit.release_date ?? undefined,
-            vote_average: hit.vote_average ?? undefined,
-            overview: hit.overview ?? undefined,
-            genre_ids: hit.genre_ids ?? [],
-          });
-        }
+        const hit = await tmdbSearch(tmdbKey, pick.title, pick.year, tmdbLang);
+        pushHit(hit);
       } catch {
         // Skip unresolvable titles — never fail the whole batch for one miss
       }

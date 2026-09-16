@@ -1,16 +1,27 @@
 import { useState, useEffect } from 'react';
-import { X, Star, Clock, Calendar } from 'lucide-react';
-import { getMovieDetails, getMovieCredits, getImageUrl } from '../services/tmdb';
+import { X, Star, Clock, Calendar, Play } from 'lucide-react';
+import {
+  getMovieDetails,
+  getMovieCredits,
+  getMovieVideos,
+  getSimilarMovies,
+  getImageUrl,
+  pickTrailerKey,
+} from '../services/tmdb';
 import { GENRE_MAP } from './MovieCard';
 
 /**
  * MovieDetails — Full-screen overlay with everything about a movie:
- * backdrop, poster, title, year, runtime, rating, genres, full overview,
- * top cast. Fetched live from TMDB on open (cached by the tmdb service).
+ * backdrop, trailer, poster, title, year, runtime, rating, genres, full
+ * overview, top cast, and a "More like this" rail. Fetched live from TMDB
+ * on open (cached by the tmdb service).
  */
-export default function MovieDetails({ movie, t, onClose }) {
+export default function MovieDetails({ movie, t, str, onClose, onSelectMovie }) {
   const [details, setDetails] = useState(null);
   const [credits, setCredits] = useState(null);
+  const [trailerKey, setTrailerKey] = useState(null);
+  const [similar, setSimilar] = useState([]);
+  const [showTrailer, setShowTrailer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -18,11 +29,23 @@ export default function MovieDetails({ movie, t, onClose }) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([getMovieDetails(movie.id), getMovieCredits(movie.id)])
-      .then(([d, c]) => {
+    setShowTrailer(false);
+    setTrailerKey(null);
+    setSimilar([]);
+    Promise.all([
+      getMovieDetails(movie.id),
+      getMovieCredits(movie.id),
+      getMovieVideos(movie.id).catch(() => null),
+      getSimilarMovies(movie.id).catch(() => null),
+    ])
+      .then(([d, c, v, s]) => {
         if (!cancelled) {
           setDetails(d);
           setCredits(c);
+          setTrailerKey(pickTrailerKey(v));
+          setSimilar(
+            (s?.results ?? []).filter((m) => m.poster_path).slice(0, 10)
+          );
           setLoading(false);
         }
       })
@@ -102,26 +125,63 @@ export default function MovieDetails({ movie, t, onClose }) {
           position: 'relative',
         }}
       >
-        {/* Backdrop */}
-        {backdropUrl && (
-          <img
-            src={backdropUrl}
-            alt=""
-            style={{
-              width: '100%',
-              aspectRatio: '16 / 8',
-              objectFit: 'cover',
-              borderRadius: '16px 16px 0 0',
-              display: 'block',
-            }}
-          />
+        {/* Backdrop / trailer */}
+        {showTrailer && trailerKey ? (
+          <div style={{ width: '100%', aspectRatio: '16 / 8', background: '#000', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}>
+            <iframe
+              title={str.trailerOf(d.title)}
+              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&rel=0`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+            />
+          </div>
+        ) : (
+          backdropUrl && (
+            <div style={{ position: 'relative' }}>
+              <img
+                src={backdropUrl}
+                alt=""
+                style={{
+                  width: '100%',
+                  aspectRatio: '16 / 8',
+                  objectFit: 'cover',
+                  borderRadius: '16px 16px 0 0',
+                  display: 'block',
+                }}
+              />
+              {trailerKey && (
+                <button
+                  onClick={() => setShowTrailer(true)}
+                  aria-label={str.playTrailer(d.title)}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    margin: 'auto',
+                    width: 64,
+                    height: 64,
+                    borderRadius: 999,
+                    border: 'none',
+                    background: `${t.accent}E6`,
+                    color: '#151A24',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Play size={26} fill="#151A24" />
+                </button>
+              )}
+            </div>
+          )
         )}
 
         {/* Close button */}
         <button
           onClick={onClose}
-          aria-label="Back to results"
-          title="Back to results"
+          aria-label={str.backToResults}
+          title={str.backToResults}
           style={{
             position: 'absolute',
             top: 12,
@@ -140,11 +200,11 @@ export default function MovieDetails({ movie, t, onClose }) {
 
         <div style={{ padding: '20px 24px 28px' }}>
           {loading && (
-            <p style={{ color: t.muted, fontSize: 14 }}>Loading details…</p>
+            <p style={{ color: t.muted, fontSize: 14 }}>{str.detailsLoading}</p>
           )}
           {error && !loading && (
             <p style={{ color: t.muted, fontSize: 14 }}>
-              Couldn't load full details ({error}) — showing basic info.
+              {str.detailsError(error)}
             </p>
           )}
 
@@ -242,7 +302,7 @@ export default function MovieDetails({ movie, t, onClose }) {
           {cast.length > 0 && (
             <>
               <h3 style={{ fontSize: 14, color: t.muted, margin: '20px 0 10px' }}>
-                Top cast
+                {str.topCast}
               </h3>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 {cast.map((c) => (
@@ -289,6 +349,42 @@ export default function MovieDetails({ movie, t, onClose }) {
             </>
           )}
 
+          {/* More like this */}
+          {similar.length > 0 && (
+            <>
+              <h3 style={{ fontSize: 14, color: t.muted, margin: '20px 0 10px' }}>
+                {str.moreLikeThis}
+              </h3>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  overflowX: 'auto',
+                  paddingBottom: 6,
+                }}
+              >
+                {similar.map((s) => (
+                  <img
+                    key={s.id}
+                    src={getImageUrl(s.poster_path, 'w185')}
+                    alt={s.title}
+                    title={s.title}
+                    loading="lazy"
+                    onClick={() => onSelectMovie?.(s)}
+                    style={{
+                      width: 84,
+                      aspectRatio: '2 / 3',
+                      objectFit: 'cover',
+                      borderRadius: 8,
+                      cursor: onSelectMovie ? 'pointer' : 'default',
+                      flexShrink: 0,
+                    }}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
           <button
             onClick={onClose}
             style={{
@@ -304,7 +400,7 @@ export default function MovieDetails({ movie, t, onClose }) {
               fontFamily: 'inherit',
             }}
           >
-            ← Back to picks
+            {str.backToPicks}
           </button>
         </div>
       </div>

@@ -58,4 +58,11 @@ export default defineSchema({
     reason: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_text", ["text"]),
+
+  // Recent searches per user (signed-out visitors use localStorage instead)
+  recentSearches: defineTable({
+    userId: v.string(),
+    text: v.string(),
+    createdAt: v.number(),
+  }).index("by_user", ["userId"]),
 });

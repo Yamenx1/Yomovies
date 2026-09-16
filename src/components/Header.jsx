@@ -7,7 +7,7 @@ import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
  * When signed out: shows "Sign In" and "Sign Up" buttons (Clerk modals)
  * When signed in: shows Clerk UserButton
  */
-export default function Header({ theme, t, onToggleTheme, onHome, onOpenFavorites, favCount }) {
+export default function Header({ theme, t, str, lang, onToggleLang, onToggleTheme, onHome, onOpenFavorites, favCount }) {
   return (
     <>
       <header
@@ -23,7 +23,7 @@ export default function Header({ theme, t, onToggleTheme, onHome, onOpenFavorite
         {/* Logo — click to go back to the main menu */}
         <div
           onClick={onHome}
-          title="Back to main menu"
+          title={str.homeTitle}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -69,7 +69,7 @@ export default function Header({ theme, t, onToggleTheme, onHome, onOpenFavorite
                     fontFamily: 'inherit',
                   }}
                 >
-                  Sign In
+                  {str.signIn}
                 </button>
               </SignInButton>
               <SignUpButton mode="modal">
@@ -86,7 +86,7 @@ export default function Header({ theme, t, onToggleTheme, onHome, onOpenFavorite
                     fontFamily: 'inherit',
                   }}
                 >
-                  Sign Up
+                  {str.signUp}
                 </button>
               </SignUpButton>
             </div>
@@ -98,8 +98,8 @@ export default function Header({ theme, t, onToggleTheme, onHome, onOpenFavorite
           {/* Favorites */}
           <button
             onClick={onOpenFavorites}
-            title="Your favorites"
-            aria-label="Open favorites"
+            title={str.favTitle}
+            aria-label={str.favTitle}
             style={{
               background: t.surface,
               border: `1px solid ${t.border}`,
@@ -139,11 +139,36 @@ export default function Header({ theme, t, onToggleTheme, onHome, onOpenFavorite
             )}
           </button>
 
+          {/* Language toggle */}
+          <button
+            onClick={onToggleLang}
+            title={lang === 'ar' ? 'English' : 'عربي'}
+            aria-label="Switch language"
+            style={{
+              background: t.surface,
+              border: `1px solid ${t.border}`,
+              borderRadius: 999,
+              minWidth: 38,
+              height: 38,
+              padding: '0 10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: t.text,
+              fontSize: 12.5,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+            }}
+          >
+            {str.langName}
+          </button>
+
           {/* Theme toggle */}
           <button
             className="theme-toggle"
             onClick={onToggleTheme}
-            aria-label="Toggle light and dark mode"
+            aria-label={str.themeToggleLabel}
             style={{
               background: t.surface,
               border: `1px solid ${t.border}`,

@@ -23,7 +23,7 @@ export const GENRE_MAP = {
  * We combine it with their image CDN to get the full URL:
  * https://image.tmdb.org/t/p/w500/abc123.jpg
  */
-export default function MovieCard({ movie, t, index, onExclude, isFavorite, onToggleFavorite, onSelect }) {
+export default function MovieCard({ movie, t, str, index, onExclude, isFavorite, onToggleFavorite, onSelect }) {
   const posterUrl = getImageUrl(movie.poster_path, 'w342');
   const year = movie.release_date ? new Date(movie.release_date).getFullYear() : '—';
   const rating = movie.vote_average ? movie.vote_average.toFixed(1) : '—';
@@ -37,13 +37,13 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
     ? movie.overview.length > 120
       ? movie.overview.slice(0, 120).trim() + '…'
       : movie.overview
-    : 'No description available.';
+    : str.noDescription;
 
   return (
     <div
       className="card"
       onClick={() => onSelect?.(movie)}
-      title={`View details for ${movie.title}`}
+      title={str.viewDetailsFor(movie.title)}
       style={{
         // True glass: mostly-transparent body so the ambient backdrop pours
         // through, heavy blur + sheen + bright rim, text kept readable
@@ -96,7 +96,7 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
             fontSize: 14,
           }}
         >
-          No poster
+          {str.noPoster}
         </div>
       )}
 
@@ -187,8 +187,8 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
             e.stopPropagation();
             onToggleFavorite(movie);
           }}
-          aria-label={isFavorite ? `Remove ${movie.title} from favorites` : `Save ${movie.title} to favorites`}
-          title={isFavorite ? 'Remove from favorites' : 'Save to favorites'}
+          aria-label={isFavorite ? str.favRemove(movie.title) : str.favSave(movie.title)}
+          title={isFavorite ? str.favRemove(movie.title) : str.favSave(movie.title)}
           style={{
             position: 'absolute',
             top: 10,
@@ -219,8 +219,8 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
           e.stopPropagation();
           onExclude(movie);
         }}
-        aria-label={`Already seen ${movie.title} — exclude it`}
-        title="Already seen this — exclude it"
+        aria-label={str.excludeSeen(movie.title)}
+        title={str.excludeTitle}
         style={{
           position: 'absolute',
           top: 10,

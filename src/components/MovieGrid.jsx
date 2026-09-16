@@ -13,6 +13,7 @@ import LoadingSpinner from './LoadingSpinner';
  */
 export default function MovieGrid({
   t,
+  str,
   movies,
   loading,
   error,
@@ -74,7 +75,7 @@ export default function MovieGrid({
               fontFamily: 'inherit',
             }}
           >
-            <RotateCcw size={12} /> {excludedCount} excluded — reset
+            <RotateCcw size={12} /> {str.excludedReset(excludedCount)}
           </button>
         )}
       </div>
@@ -91,11 +92,11 @@ export default function MovieGrid({
             color: t.muted,
           }}
         >
-          <p style={{ fontSize: 16, marginBottom: 8 }}>😕 Something went wrong</p>
+          <p style={{ fontSize: 16, marginBottom: 8 }}>{str.gridErrorTitle}</p>
           <p style={{ fontSize: 13, opacity: 0.7 }}>{error}</p>
           {!apiReady && (
             <p style={{ fontSize: 13, marginTop: 12, color: t.accent }}>
-              Make sure your TMDB API key is set in the .env file
+              {str.tmdbKeyHint}
             </p>
           )}
         </div>
@@ -104,7 +105,7 @@ export default function MovieGrid({
       {/* No results (all excluded) */}
       {!loading && !error && movies.length === 0 && (
         <p style={{ color: t.muted, fontSize: 14, textAlign: 'center' }}>
-          Nothing to show — try a different search, or reset your exclusions above.
+          {str.gridEmpty}
         </p>
       )}
 
@@ -122,6 +123,7 @@ export default function MovieGrid({
               key={movie.id}
               movie={movie}
               t={t}
+              str={str}
               index={i}
               onExclude={onExclude}
               isFavorite={favoriteIds?.has(movie.id)}

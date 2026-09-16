@@ -15,6 +15,13 @@
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
+// UI language for TMDB responses ('en-US' default, 'ar-SA' for Arabic).
+// Switch with setTmdbLang — the in-memory cache keys include the language.
+let LANG = 'en-US';
+export function setTmdbLang(lang) {
+  LANG = lang;
+}
+
 // Your API key — loaded from .env file
 const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 
@@ -33,7 +40,7 @@ async function fetchFromTMDB(endpoint, params = {}) {
   // Build the full URL with API key and parameters
   const url = new URL(`${BASE_URL}${endpoint}`);
   url.searchParams.set('api_key', API_KEY);
-  url.searchParams.set('language', 'en-US');
+  url.searchParams.set('language', LANG);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
       url.searchParams.set(key, String(value));
@@ -141,6 +148,43 @@ export async function getMovieDetails(movieId) {
  */
 export async function getMovieCredits(movieId) {
   return fetchFromTMDB(`/movie/${movieId}/credits`);
+}
+
+/**
+ * Get videos (trailers, teasers) for a single movie.
+ *
+ * @param {number} movieId - TMDB movie ID
+ * @returns {Promise<object>} - { results: [{ key, site, type, ... }] }
+ */
+export async function getMovieVideos(movieId) {
+  return fetchFromTMDB(`/movie/${movieId}/videos`);
+}
+
+/**
+ * Get movies similar to the given one.
+ *
+ * @param {number} movieId - TMDB movie ID
+ * @param {number} page - Page number (default: 1)
+ * @returns {Promise<object>} - { results: [...movies] }
+ */
+export async function getSimilarMovies(movieId, page = 1) {
+  return fetchFromTMDB(`/movie/${movieId}/similar`, { page });
+}
+
+/**
+ * Pick the best YouTube trailer key from a videos response.
+ * Prefers official Trailers, falls back to any teaser/clip.
+ */
+export function pickTrailerKey(videos) {
+  const list = videos?.results ?? [];
+  const yt = list.filter((v) => v.site === 'YouTube');
+  return (
+    yt.find((v) => v.type === 'Trailer' && v.official)?.key ??
+    yt.find((v) => v.type === 'Trailer')?.key ??
+    yt.find((v) => v.type === 'Teaser')?.key ??
+    yt[0]?.key ??
+    null
+  );
 }
 
 /**

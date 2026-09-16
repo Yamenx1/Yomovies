@@ -6,7 +6,7 @@ import { getImageUrl } from '../services/tmdb';
  * FavoritesDrawer — Glass slide-over panel from the right edge:
  * poster thumb, title, year · tap a row to view details, trash to remove.
  */
-export default function FavoritesDrawer({ t, items, persistent, onClose, onView, onRemove }) {
+export default function FavoritesDrawer({ t, str, items, persistent, onClose, onView, onRemove }) {
   // Close on Escape
   useEffect(() => {
     const onKey = (e) => {
@@ -68,11 +68,11 @@ export default function FavoritesDrawer({ t, items, persistent, onClose, onView,
               margin: 0,
             }}
           >
-            Favorites ({items.length})
+            {str.favTitle} ({items.length})
           </h2>
           <button
             onClick={onClose}
-            aria-label="Close favorites"
+            aria-label={str.closeFavorites}
             style={{
               background: 'none',
               border: `1px solid ${t.border}`,
@@ -94,7 +94,7 @@ export default function FavoritesDrawer({ t, items, persistent, onClose, onView,
         <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
           {items.length === 0 && (
             <p style={{ color: t.muted, fontSize: 14, textAlign: 'center', marginTop: 40 }}>
-              No favorites yet — tap the heart on any movie.
+              {str.favEmpty}
             </p>
           )}
           {items.map((m) => {
@@ -104,7 +104,7 @@ export default function FavoritesDrawer({ t, items, persistent, onClose, onView,
               <div
                 key={m.id}
                 onClick={() => onView(m)}
-                title={`View details for ${m.title}`}
+                title={str.viewDetailsFor(m.title)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -159,8 +159,8 @@ export default function FavoritesDrawer({ t, items, persistent, onClose, onView,
                     e.stopPropagation();
                     onRemove(m);
                   }}
-                  aria-label={`Remove ${m.title} from favorites`}
-                  title="Remove from favorites"
+                  aria-label={str.removeFavorite(m.title)}
+                  title={str.removeFavorite(m.title)}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -188,7 +188,7 @@ export default function FavoritesDrawer({ t, items, persistent, onClose, onView,
             textAlign: 'center',
           }}
         >
-          {persistent ? 'Synced to your account' : 'Sign in to sync favorites on every device'}
+          {persistent ? str.favSyncIn : str.favSyncOut}
         </div>
       </aside>
     </div>

@@ -11,7 +11,8 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import THEMES from './config/theme';
-import { isApiKeyConfigured, getTrending, getImageUrl } from './services/tmdb';
+import { STRINGS } from './config/strings';
+import { isApiKeyConfigured, getTrending, getImageUrl, setTmdbLang } from './services/tmdb';
 import { useSurpriseMovies } from './hooks/useMovies';
 import Header from './components/Header';
 import MoodPicker from './components/MoodPicker';
@@ -21,6 +22,27 @@ import FavoritesDrawer from './components/FavoritesDrawer';
 
 export default function App() {
   const { isAuthenticated } = useConvexAuth();
+
+  // --- Language (persisted per browser, flips RTL + TMDB language) ---
+  const [lang, setLang] = useState(() => {
+    try {
+      return localStorage.getItem('yo-lang') === 'ar' ? 'ar' : 'en';
+    } catch {
+      return 'en';
+    }
+  });
+  const str = STRINGS[lang] ?? STRINGS.en;
+  useEffect(() => {
+    try {
+      localStorage.setItem('yo-lang', lang);
+    } catch {}
+    document.documentElement.lang = lang;
+    document.documentElement.dir = str.dir;
+    setTmdbLang(lang === 'ar' ? 'ar-SA' : 'en-US');
+  }, [lang, str.dir]);
+  const toggleLang = useCallback(() => {
+    setLang((prev) => (prev === 'ar' ? 'en' : 'ar'));
+  }, []);
 
   // --- Convex state (null/[] while loading or signed out) ---
   const prefs = useQuery(api.preferences.get);
@@ -104,8 +126,8 @@ export default function App() {
         movies: surprise.movies,
         loading: surprise.loading,
         error: surprise.error,
-        heading: 'Surprise picks — random treasures, no input required.',
-        badge: 'Live picks',
+        heading: str.surpriseHeading,
+        badge: str.badgeLive,
       }
     : search == null
       ? { movies: [], loading: false, error: null, heading: null, badge: null }
@@ -114,7 +136,7 @@ export default function App() {
           loading: search.loading,
           error: search.error,
           heading: search.reason,
-          badge: 'AI picks',
+          badge: str.badgeAi,
         };
 
   // Filter out watched/excluded movies
@@ -469,6 +491,9 @@ export default function App() {
       <Header
         theme={themeName}
         t={t}
+        str={str}
+        lang={lang}
+        onToggleLang={toggleLang}
         onToggleTheme={toggleTheme}
         onHome={handleHome}
         onOpenFavorites={() => setFavOpen(true)}
@@ -477,6 +502,8 @@ export default function App() {
 
       <MoodPicker
         t={t}
+        str={str}
+        lang={lang}
         onResults={handleResults}
         onSearchLoading={handleSearchLoading}
         onSearchError={handleSearchError}
@@ -488,7 +515,7 @@ export default function App() {
       {favoritesForRow.length > 0 && (
         <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 20px 0' }}>
           <h3 style={{ fontSize: 14, color: t.muted, margin: '0 0 12px' }}>
-            ♥ Your favorites ({favoritesForRow.length})
+            {str.yourFavorites(favoritesForRow.length)}
           </h3>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {favoritesForRow.slice(0, 10).map((f) => (
@@ -526,6 +553,7 @@ export default function App() {
       {showResults && (
         <MovieGrid
           t={t}
+          str={str}
           movies={filteredMovies}
           loading={viewing.loading}
           error={viewing.error}
@@ -546,7 +574,9 @@ export default function App() {
         <MovieDetails
           movie={selectedMovie}
           t={t}
+          str={str}
           onClose={() => setSelectedMovie(null)}
+          onSelectMovie={setSelectedMovie}
         />
       )}
 
@@ -554,6 +584,7 @@ export default function App() {
       {favOpen && (
         <FavoritesDrawer
           t={t}
+          str={str}
           items={favoriteItems}
           persistent={isAuthenticated}
           onClose={() => setFavOpen(false)}
@@ -575,7 +606,7 @@ export default function App() {
           opacity: 0.6,
         }}
       >
-        Powered by{' '}
+        {str.footerPowered}{' '}
         <a
           href="https://www.themoviedb.org/"
           target="_blank"
@@ -584,7 +615,7 @@ export default function App() {
         >
           TMDB
         </a>
-        . This product uses the TMDB API but is not endorsed or certified by TMDB.
+        {str.footerNote}
       </footer>
     </div>
   );
