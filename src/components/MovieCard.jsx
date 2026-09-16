@@ -49,10 +49,10 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
         // through, heavy blur + sheen + bright rim, text kept readable
         // with a soft shadow
         background: t.dark
-          ? 'linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.03) 45%), rgba(31,37,52,0.38)'
-          : 'linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0.18) 45%), rgba(255,255,255,0.42)',
-        backdropFilter: 'blur(26px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(26px) saturate(180%)',
+          ? 'linear-gradient(135deg, rgba(255,255,255,0.16), rgba(255,255,255,0.03) 45%), rgba(31,37,52,0.22)'
+          : 'linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0.18) 45%), rgba(255,255,255,0.30)',
+        backdropFilter: 'blur(30px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(30px) saturate(180%)',
         border: t.dark
           ? '1px solid rgba(255,255,255,0.18)'
           : '1px solid rgba(21,26,36,0.14)',
