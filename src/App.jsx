@@ -201,6 +201,13 @@ export default function App() {
       ? favoritesList
       : viewing.movies.filter((m) => localFavorites.has(m.id));
 
+  // Ambient backdrop: blurred backdrops of the movies on screen, so the
+  // whole page mirrors the current picks. Low-res is plenty when blurred.
+  const ambient = viewing.movies
+    .filter((m) => m.backdrop_path)
+    .slice(0, 3);
+  const ambientKey = ambient.map((m) => m.id).join(',');
+
   // Drawer items need poster/title — Convex rows carry them, signed-out
   // rows resolve against the movies currently on screen
   const favoriteItems =
@@ -233,7 +240,9 @@ export default function App() {
         '--my': '20vh',
       }}
     >
-      {/* Cinematic glass backdrop: aurora blobs + cursor glow + vignette + grain */}
+      {/* Cinematic glass backdrop: aurora blobs + cursor glow + vignette + grain.
+          When movies are on screen, their blurred backdrops take over so the
+          page mirrors the current picks. */}
       <div
         aria-hidden
         style={{
@@ -244,39 +253,76 @@ export default function App() {
           overflow: 'hidden',
         }}
       >
-        {/* Drifting aurora blobs */}
-        <div
-          className="aurora-a"
-          style={{
-            position: 'absolute',
-            width: '55vmax',
-            height: '55vmax',
-            left: '-15vmax',
-            top: '-20vmax',
-            borderRadius: '50%',
-            filter: 'blur(90px)',
-            background:
-              themeName === 'dark'
-                ? `${t.accent}2E`
-                : '#ffd9c455',
-            animation: 'driftA 26s ease-in-out infinite alternate',
-          }}
-        />
-        <div
-          className="aurora-b"
-          style={{
-            position: 'absolute',
-            width: '50vmax',
-            height: '50vmax',
-            right: '-18vmax',
-            top: '30vh',
-            borderRadius: '50%',
-            filter: 'blur(100px)',
-            background:
-              themeName === 'dark' ? '#4a6bff26' : '#bcd0ff66',
-            animation: 'driftB 32s ease-in-out infinite alternate',
-          }}
-        />
+        {ambient.length > 0 ? (
+          <div
+            key={ambientKey}
+            style={{ position: 'absolute', inset: 0, animation: 'ambientIn 1.2s ease' }}
+          >
+            {ambient.map((m, i) => (
+              <div
+                key={m.id}
+                style={{
+                  position: 'absolute',
+                  inset: '-5%',
+                  backgroundImage: `url(https://image.tmdb.org/t/p/w300${m.backdrop_path})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: `${15 + i * 35}% ${20 + i * 25}%`,
+                  filter: 'blur(70px) saturate(1.4)',
+                  opacity: i === 0 ? 0.5 : 0.35,
+                }}
+              />
+            ))}
+            {/* Readability wash in the active theme */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background:
+                  themeName === 'dark'
+                    ? 'linear-gradient(rgba(21,26,36,0.55), rgba(21,26,36,0.88)),' +
+                      ' radial-gradient(ellipse 130% 110% at 50% 45%, transparent 40%, rgba(0,0,0,0.55) 100%)'
+                    : 'linear-gradient(rgba(245,243,238,0.72), rgba(245,243,238,0.94)),' +
+                      ' radial-gradient(ellipse 130% 110% at 50% 45%, transparent 50%, rgba(21,26,36,0.14) 100%)',
+              }}
+            />
+          </div>
+        ) : (
+          <>
+            {/* Drifting aurora blobs (idle / pre-search state) */}
+            <div
+              className="aurora-a"
+              style={{
+                position: 'absolute',
+                width: '55vmax',
+                height: '55vmax',
+                left: '-15vmax',
+                top: '-20vmax',
+                borderRadius: '50%',
+                filter: 'blur(90px)',
+                background:
+                  themeName === 'dark'
+                    ? `${t.accent}2E`
+                    : '#ffd9c455',
+                animation: 'driftA 26s ease-in-out infinite alternate',
+              }}
+            />
+            <div
+              className="aurora-b"
+              style={{
+                position: 'absolute',
+                width: '50vmax',
+                height: '50vmax',
+                right: '-18vmax',
+                top: '30vh',
+                borderRadius: '50%',
+                filter: 'blur(100px)',
+                background:
+                  themeName === 'dark' ? '#4a6bff26' : '#bcd0ff66',
+                animation: 'driftB 32s ease-in-out infinite alternate',
+              }}
+            />
+          </>
+        )}
         {/* Cursor-following glass glow */}
         <div
           style={{
@@ -285,19 +331,21 @@ export default function App() {
             background: `radial-gradient(520px circle at var(--mx, 50vw) var(--my, 20vh), ${t.accent}30, transparent 70%)`,
           }}
         />
-        {/* Static spotlight + vignette */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              themeName === 'dark'
-                ? `radial-gradient(ellipse 90% 55% at 50% -10%, ${t.accent}1F, transparent 70%),` +
-                  ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 55%, rgba(0,0,0,0.5) 100%)`
-                : `radial-gradient(ellipse 90% 55% at 50% -10%, #ffffffcc, transparent 70%),` +
-                  ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 60%, rgba(21,26,36,0.12) 100%)`,
-          }}
-        />
+        {/* Static spotlight + vignette (idle state only — ambient brings its own) */}
+        {ambient.length === 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background:
+                themeName === 'dark'
+                  ? `radial-gradient(ellipse 90% 55% at 50% -10%, ${t.accent}1F, transparent 70%),` +
+                    ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 55%, rgba(0,0,0,0.5) 100%)`
+                  : `radial-gradient(ellipse 90% 55% at 50% -10%, #ffffffcc, transparent 70%),` +
+                    ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 60%, rgba(21,26,36,0.12) 100%)`,
+            }}
+          />
+        )}
       </div>
       <div
         aria-hidden
@@ -323,6 +371,10 @@ export default function App() {
         @keyframes driftB {
           from { transform: translate(0, 0) scale(1.1); }
           to { transform: translate(-8vmax, -6vmax) scale(0.95); }
+        }
+        @keyframes ambientIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
         }
         .card {
           animation: rise 0.35s ease both;
