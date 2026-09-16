@@ -2,36 +2,43 @@ import { useState } from 'react';
 import { Shuffle, Sparkles } from 'lucide-react';
 import { useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { MOODS, matchMoodFromText } from '../config/moods';
+import { matchMoodFromText } from '../config/moods';
+
+// Example searches — tap to fill the box and run it. They teach by doing:
+// each one shows the kind of everyday language the AI understands.
+const EXAMPLES = [
+  'I need a good cry',
+  'something cozy for tonight',
+  'give me an adrenaline rush',
+  'bend my mind',
+];
 
 /**
- * MoodPicker — The hero section with:
+ * MoodPicker — Search-first hero section:
  * 1. Headline
- * 2. AI text input: Gemini (via a Convex action, key stays server-side)
- *    reads the feeling, then keyword matching backs it up offline
- * 3. Mood buttons grid
- * 4. "Surprise me" button
+ * 2. Free-text input read by Gemini (via a Convex action, key stays
+ *    server-side), with keyword matching as the offline fallback
+ * 3. Example searches + "Surprise me" for zero-effort discovery
  *
  * Also shows an API key warning if TMDB isn't configured yet.
  */
-export default function MoodPicker({ t, selectedMood, onMoodSelect, onSurprise, apiReady }) {
+export default function MoodPicker({ t, onMoodSelect, onSurprise, apiReady }) {
   const [freeText, setFreeText] = useState('');
   const [noMatch, setNoMatch] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiNote, setAiNote] = useState(null);
   const detectMood = useAction(api.moodAi.detectMood);
 
-  async function handleTextSubmit(e) {
-    e.preventDefault();
-    const text = freeText.trim();
-    if (!text || aiLoading) return;
+  async function runSearch(text) {
+    const query = text.trim();
+    if (!query || aiLoading) return;
     setNoMatch(false);
     setAiNote(null);
 
     // 1. Ask Gemini first (server-side action — API key never hits the browser)
     setAiLoading(true);
     try {
-      const ai = await detectMood({ text });
+      const ai = await detectMood({ text: query });
       if (ai?.moodId) {
         onMoodSelect(ai.moodId);
         setAiNote(
@@ -47,7 +54,7 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, onSurprise, 
     }
 
     // 2. Keyword fallback (also covers AI downtime)
-    const matched = matchMoodFromText(text);
+    const matched = matchMoodFromText(query);
     if (matched) {
       onMoodSelect(matched);
     } else {
@@ -56,11 +63,14 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, onSurprise, 
     }
   }
 
-  function pickMood(id) {
-    setNoMatch(false);
-    setAiNote(null);
-    setFreeText('');
-    onMoodSelect(id);
+  function handleTextSubmit(e) {
+    e.preventDefault();
+    runSearch(freeText);
+  }
+
+  function runExample(example) {
+    setFreeText(example);
+    runSearch(example);
   }
 
   function surpriseMe() {
@@ -85,7 +95,7 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, onSurprise, 
         What do you feel like watching tonight?
       </h1>
       <p style={{ color: t.muted, fontSize: 16, margin: '0 0 32px', lineHeight: 1.5 }}>
-        Tell me your mood, or pick one below — no plot summaries required.
+        Describe it in your own words — the AI reads the feeling, no genres required.
       </p>
 
       {/* API key warning */}
@@ -121,7 +131,7 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, onSurprise, 
       )}
 
       {/* Free-text input */}
-      <form onSubmit={handleTextSubmit} style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
+      <form onSubmit={handleTextSubmit} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <input
           type="text"
           value={freeText}
@@ -163,8 +173,8 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, onSurprise, 
           style={{
             color: t.accent,
             fontSize: 13.5,
-            marginTop: -16,
-            marginBottom: 20,
+            marginTop: 0,
+            marginBottom: 16,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -176,22 +186,22 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, onSurprise, 
       )}
 
       {noMatch && (
-        <p style={{ color: t.muted, fontSize: 14, marginTop: -16, marginBottom: 20 }}>
-          Couldn't quite place that mood — try one of these instead:
+        <p style={{ color: t.muted, fontSize: 14, marginTop: 0, marginBottom: 16 }}>
+          Couldn't quite place that feeling — try different words, or hit Surprise me:
         </p>
       )}
 
-      {/* Mood buttons */}
+      {/* Example searches */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 8 }}>
-        {MOODS.map((m) => (
+        {EXAMPLES.map((ex) => (
           <button
-            key={m.id}
+            key={ex}
             className="mood-btn"
-            onClick={() => pickMood(m.id)}
+            onClick={() => runExample(ex)}
             style={{
               background: 'transparent',
-              border: `1px solid ${selectedMood === m.id ? t.accent : t.border}`,
-              color: selectedMood === m.id ? t.text : t.muted,
+              border: `1px solid ${t.border}`,
+              color: t.muted,
               borderRadius: 999,
               padding: '8px 16px',
               fontSize: 13.5,
@@ -199,7 +209,7 @@ export default function MoodPicker({ t, selectedMood, onMoodSelect, onSurprise, 
               fontFamily: 'inherit',
             }}
           >
-            {m.label}
+            “{ex}”
           </button>
         ))}
       </div>

@@ -239,7 +239,6 @@ export default function App() {
 
       <MoodPicker
         t={t}
-        selectedMood={selectedMood}
         onMoodSelect={handleMoodSelect}
         onSurprise={handleSurprise}
         apiReady={apiReady}
