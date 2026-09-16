@@ -272,17 +272,18 @@ export default function App() {
                 }}
               />
             ))}
-            {/* Readability wash in the active theme */}
+            {/* Readability wash in the active theme — kept light on purpose
+                so the movies' colors pour through the glass cards */}
             <div
               style={{
                 position: 'absolute',
                 inset: 0,
                 background:
                   themeName === 'dark'
-                    ? 'linear-gradient(rgba(21,26,36,0.55), rgba(21,26,36,0.88)),' +
-                      ' radial-gradient(ellipse 130% 110% at 50% 45%, transparent 40%, rgba(0,0,0,0.55) 100%)'
-                    : 'linear-gradient(rgba(245,243,238,0.72), rgba(245,243,238,0.94)),' +
-                      ' radial-gradient(ellipse 130% 110% at 50% 45%, transparent 50%, rgba(21,26,36,0.14) 100%)',
+                    ? 'linear-gradient(rgba(21,26,36,0.38), rgba(21,26,36,0.72)),' +
+                      ' radial-gradient(ellipse 130% 110% at 50% 45%, transparent 40%, rgba(0,0,0,0.42) 100%)'
+                    : 'linear-gradient(rgba(245,243,238,0.60), rgba(245,243,238,0.86)),' +
+                      ' radial-gradient(ellipse 130% 110% at 50% 45%, transparent 50%, rgba(21,26,36,0.12) 100%)',
               }}
             />
           </div>
