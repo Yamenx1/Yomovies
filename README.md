@@ -101,6 +101,7 @@ npm run dev           # terminal 2
 ---
 
 ## Credits
+Yamenx1
 
 - Movie data from [TMDB](https://www.themoviedb.org/) (not endorsed by TMDB)
 - AI by [Google Gemini](https://deepmind.google/technologies/gemini/)
