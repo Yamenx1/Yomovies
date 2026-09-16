@@ -40,12 +40,10 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
 
-  // Server-side daily snapshots: one pick-list per mood per day (UTC).
-  // Written by the midnight cron + backfillable via snapshots:fetchAndStore.
-  // Clients read today's snapshot first, fall back to live TMDB if missing.
-  dailySnapshots: defineTable({
-    moodId: v.string(),
-    date: v.string(), // YYYY-MM-DD (UTC)
+  // AI search cache: exact-text repeats return instantly
+  // without new AI/TMDB calls
+  aiCache: defineTable({
+    text: v.string(), // normalized (lowercased, trimmed) user input
     movies: v.array(
       v.object({
         id: v.number(),
@@ -57,6 +55,7 @@ export default defineSchema({
         genre_ids: v.array(v.number()),
       })
     ),
+    reason: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_mood_date", ["moodId", "date"]),
+  }).index("by_text", ["text"]),
 });

@@ -1,20 +1,18 @@
 // ---------------------------------------------------------------------------
-// APP — Root component for Yo Movies (Clerk + Convex + TMDB)
+// APP — Root component for Yo Movies (Clerk + Convex + TMDB + Gemini)
 // ---------------------------------------------------------------------------
-// - Theme / last mood persist in Convex `preferences` when signed in
-// - "Already seen" persists in Convex `watched` (falls back to local Set)
-// - Favorites persist in Convex `favorites` (heart button on cards)
-// - Every mood pick is logged to Convex `moodActivity`
-// - Signed-out visitors get the same UI backed by local state
+// - Search: Gemini names real films for ANY feeling, TMDB verifies each one
+// - Surprise: random trending picks, no input needed
+// - Theme / watched / favorites persist in Convex when signed in,
+//   local state when signed out
 // ---------------------------------------------------------------------------
 
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import THEMES from './config/theme';
-import { MOODS } from './config/moods';
 import { isApiKeyConfigured } from './services/tmdb';
-import { useMovies, useSurpriseMovies } from './hooks/useMovies';
+import { useSurpriseMovies } from './hooks/useMovies';
 import Header from './components/Header';
 import MoodPicker from './components/MoodPicker';
 import MovieGrid from './components/MovieGrid';
@@ -33,43 +31,24 @@ export default function App() {
   const clearWatched = useMutation(api.watched.clear);
   const addFavorite = useMutation(api.favorites.add);
   const removeFavorite = useMutation(api.favorites.remove);
-  const logMood = useMutation(api.activity.log);
 
   // --- Local fallback state (signed-out + instant UI) ---
   const [localTheme, setLocalTheme] = useState('dark');
-  const [localMood, setLocalMood] = useState(null);
   const [localExcluded, setLocalExcluded] = useState(() => new Set());
   const [localFavorites, setLocalFavorites] = useState(() => new Set());
+
+  // AI search results (null = nothing searched yet)
+  const [search, setSearch] = useState(null);
 
   // Random-movie surprise (null = off). A fresh seed redeals the hand.
   const [surpriseSeed, setSurpriseSeed] = useState(null);
   const surprise = useSurpriseMovies(surpriseSeed);
-  const SURPRISE_MOOD = {
-    id: 'surprise',
-    label: 'Surprise picks',
-    blurb: 'random treasures — no mood required',
-  };
-
-  // Snapshot day being viewed (null = latest). Reset on mood change.
-  const [historyDate, setHistoryDate] = useState(null);
 
   // Opened movie (details overlay). Null = grid view.
   const [selectedMovie, setSelectedMovie] = useState(null);
 
-  // Resolve effective state: Convex wins when signed in and loaded.
-  // (Empty-string lastMood means "back at the main menu" — see handleHome.)
-  // NOTE: selectedMood must be defined before any hook that reads it.
   const themeName =
     isAuthenticated && prefs?.theme ? prefs.theme : localTheme;
-  const selectedMood =
-    isAuthenticated && prefs !== undefined
-      ? (prefs?.lastMood || localMood)
-      : localMood;
-
-  const snapshotHistory = useQuery(
-    api.snapshots.history,
-    selectedMood ? { moodId: selectedMood, limit: 7 } : 'skip'
-  );
 
   const excludedSet =
     isAuthenticated && watchedList
@@ -83,28 +62,28 @@ export default function App() {
 
   const t = THEMES[themeName] ?? THEMES.dark;
 
-  // Moods can be removed over time — ignore persisted ids with no config
-  // (e.g. users who saved 'bored' before it was retired)
-  const knownMood = selectedMood == null || MOODS.some((m) => m.id === selectedMood);
-  const effectiveMood = knownMood ? selectedMood : null;
-
-  // Fetch movies: Convex daily snapshot first, live TMDB fallback.
-  // Surprise mode bypasses moods entirely with random trending picks.
-  const moodResult = useMovies(surpriseSeed != null ? null : effectiveMood, historyDate);
+  // What the grid shows: surprise hand wins, otherwise the latest search
   const isSurprise = surpriseSeed != null;
-  const movies = isSurprise ? surprise.movies : moodResult.movies;
-  const loading = isSurprise ? surprise.loading : moodResult.loading;
-  const error = isSurprise ? surprise.error : moodResult.error;
-  const source = isSurprise ? 'live' : moodResult.source;
-  const date = moodResult.date;
+  const viewing = isSurprise
+    ? {
+        movies: surprise.movies,
+        loading: surprise.loading,
+        error: surprise.error,
+        heading: 'Surprise picks — random treasures, no input required.',
+        badge: 'Live picks',
+      }
+    : search == null
+      ? { movies: [], loading: false, error: null, heading: null, badge: null }
+      : {
+          movies: search.movies,
+          loading: search.loading,
+          error: search.error,
+          heading: search.reason,
+          badge: 'AI picks',
+        };
 
   // Filter out watched/excluded movies
-  const filteredMovies = movies.filter((m) => !excludedSet.has(m.id));
-
-  // Find the active mood object for displaying the blurb
-  const activeMood = isSurprise
-    ? SURPRISE_MOOD
-    : MOODS.find((m) => m.id === selectedMood);
+  const filteredMovies = viewing.movies.filter((m) => !excludedSet.has(m.id));
 
   // --- Callbacks ---
   const toggleTheme = useCallback(() => {
@@ -116,38 +95,42 @@ export default function App() {
     if (isAuthenticated) setPrefs({ theme: next }).catch(() => {});
   }, [isAuthenticated, prefs, localTheme, setPrefs]);
 
-  const handleMoodSelect = useCallback(
-    (moodId) => {
-      setLocalMood(moodId);
-      setHistoryDate(null); // back to latest snapshot for the new mood
-      setSelectedMovie(null); // close any open details
-      setSurpriseSeed(null); // leave surprise mode
-      if (isAuthenticated) {
-        setPrefs({ lastMood: moodId }).catch(() => {});
-        logMood({ moodId }).catch(() => {});
-      }
-    },
-    [isAuthenticated, setPrefs, logMood]
-  );
+  // AI search completed in MoodPicker — show its movies
+  const handleResults = useCallback((results) => {
+    setSearch({ ...results, loading: false, error: null });
+    setSelectedMovie(null); // close any open details
+    setSurpriseSeed(null); // leave surprise mode
+  }, []);
 
-  // "Surprise me" — deal a fresh hand of random movies, no mood involved
+  const handleSearchLoading = useCallback((loading) => {
+    setSearch((prev) => ({ ...(prev ?? { movies: [] }), loading, error: null }));
+    if (loading) {
+      setSelectedMovie(null);
+      setSurpriseSeed(null);
+    }
+  }, []);
+
+  const handleSearchError = useCallback((message) => {
+    setSearch((prev) => ({
+      ...(prev ?? { movies: [] }),
+      loading: false,
+      error: message,
+    }));
+  }, []);
+
+  // "Surprise me" — deal a fresh hand of random movies
   const handleSurprise = useCallback(() => {
-    setLocalMood(null);
-    setHistoryDate(null);
+    setSearch(null);
     setSelectedMovie(null);
-    if (isAuthenticated) setPrefs({ lastMood: '' }).catch(() => {});
     setSurpriseSeed(Date.now());
-  }, [isAuthenticated, setPrefs]);
+  }, []);
 
   // Logo / site name → back to the main menu
   const handleHome = useCallback(() => {
-    setLocalMood(null);
-    setHistoryDate(null);
+    setSearch(null);
     setSelectedMovie(null);
     setSurpriseSeed(null);
-    // Empty string clears the persisted mood (see selectedMood above)
-    if (isAuthenticated) setPrefs({ lastMood: '' }).catch(() => {});
-  }, [isAuthenticated, setPrefs]);
+  }, []);
 
   const handleExclude = useCallback(
     (movie) => {
@@ -201,7 +184,10 @@ export default function App() {
   const favoritesForRow =
     isAuthenticated && favoritesList
       ? favoritesList
-      : movies.filter((m) => localFavorites.has(m.id));
+      : viewing.movies.filter((m) => localFavorites.has(m.id));
+
+  const showResults =
+    viewing.loading || viewing.error || viewing.movies.length > 0;
 
   return (
     <div
@@ -239,7 +225,9 @@ export default function App() {
 
       <MoodPicker
         t={t}
-        onMoodSelect={handleMoodSelect}
+        onResults={handleResults}
+        onSearchLoading={handleSearchLoading}
+        onSearchError={handleSearchError}
         onSurprise={handleSurprise}
         apiReady={apiReady}
       />
@@ -270,7 +258,7 @@ export default function App() {
       )}
 
       {/* Film-strip divider */}
-      {(effectiveMood || isSurprise) && (
+      {showResults && (
         <div
           style={{
             width: '100%',
@@ -283,23 +271,20 @@ export default function App() {
       )}
 
       {/* Movie results */}
-      {(effectiveMood || isSurprise) && (
+      {showResults && (
         <MovieGrid
           t={t}
           movies={filteredMovies}
-          loading={loading}
-          error={error}
-          activeMood={activeMood}
+          loading={viewing.loading}
+          error={viewing.error}
+          heading={viewing.heading}
+          badge={viewing.badge}
           excludedCount={excludedSet.size}
           onExclude={handleExclude}
           onClearExcluded={handleClearExcluded}
           apiReady={apiReady}
           favoriteIds={favoriteIds}
           onToggleFavorite={handleToggleFavorite}
-          source={source}
-          activeDate={date}
-          history={isSurprise ? [] : (snapshotHistory ?? [])}
-          onSelectDate={setHistoryDate}
           onSelect={setSelectedMovie}
         />
       )}

@@ -1,13 +1,8 @@
 import { cronJobs } from "convex/server";
-import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Fresh picks for every mood, shortly after midnight UTC.
-crons.daily(
-  "fetch daily movie snapshots",
-  { hourUTC: 0, minuteUTC: 5 },
-  internal.snapshots.fetchAndStore
-);
+// No scheduled jobs: picks are generated on demand by the aiRecommend
+// action (cached per exact search text in aiCache).
 
 export default crons;

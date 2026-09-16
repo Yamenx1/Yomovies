@@ -4,9 +4,10 @@ import LoadingSpinner from './LoadingSpinner';
 
 /**
  * MovieGrid — Renders the results section:
- * - Mood description blurb
+ * - Heading (the AI's reason line, or the Surprise label)
+ * - Source badge (AI picks / Live picks)
  * - Loading spinner while fetching
- * - Error message if API fails
+ * - Error message if the search fails
  * - Grid of MovieCards
  * - "All excluded" fallback message
  */
@@ -15,7 +16,8 @@ export default function MovieGrid({
   movies,
   loading,
   error,
-  activeMood,
+  heading,
+  badge,
   excludedCount,
   onExclude,
   onClearExcluded,
@@ -23,23 +25,10 @@ export default function MovieGrid({
   favoriteIds,
   onToggleFavorite,
   onSelect,
-  source,
-  activeDate,
-  history,
-  onSelectDate,
 }) {
-  const todayLabel = new Date().toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
-  const formatDay = (iso) =>
-    new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-    });
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px 80px' }}>
-      {/* Mood blurb + reset button */}
+      {/* Heading + badge + reset button */}
       <div
         style={{
           display: 'flex',
@@ -50,46 +39,25 @@ export default function MovieGrid({
           marginBottom: 28,
         }}
       >
-        <p style={{ color: t.muted, fontSize: 14, margin: 0 }}>
-          <Sparkles size={13} style={{ verticalAlign: -2, marginRight: 6 }} />
-          For when you're feeling {activeMood.label.toLowerCase()} — {activeMood.blurb}
-        </p>
-        <span
-          style={{
-            background: `${t.accent}18`,
-            color: t.accent,
-            fontSize: 11.5,
-            padding: '3px 10px',
-            borderRadius: 999,
-            fontWeight: 600,
-          }}
-        >
-          {source === 'snapshot'
-            ? `Daily picks · ${formatDay(activeDate)}`
-            : `Live picks · ${todayLabel}`}
-        </span>
-        {history.length >= 1 && (
-          <select
-            value={activeDate}
-            onChange={(e) => onSelectDate(e.target.value)}
-            aria-label="View picks from a past day"
+        {heading && (
+          <p style={{ color: t.muted, fontSize: 14, margin: 0 }}>
+            <Sparkles size={13} style={{ verticalAlign: -2, marginRight: 6 }} />
+            {heading}
+          </p>
+        )}
+        {badge && (
+          <span
             style={{
-              background: t.surface,
-              border: `1px solid ${t.border}`,
+              background: `${t.accent}18`,
+              color: t.accent,
+              fontSize: 11.5,
+              padding: '3px 10px',
               borderRadius: 999,
-              padding: '4px 10px',
-              fontSize: 12,
-              color: t.muted,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
+              fontWeight: 600,
             }}
           >
-            {history.map((h) => (
-              <option key={h.date} value={h.date}>
-                {formatDay(h.date)} ({h.count})
-              </option>
-            ))}
-          </select>
+            {badge}
+          </span>
         )}
         {excludedCount > 0 && (
           <button
@@ -136,7 +104,7 @@ export default function MovieGrid({
       {/* No results (all excluded) */}
       {!loading && !error && movies.length === 0 && (
         <p style={{ color: t.muted, fontSize: 14, textAlign: 'center' }}>
-          You've excluded every match for this mood — try another mood, or reset your exclusions above.
+          Nothing to show — try a different search, or reset your exclusions above.
         </p>
       )}
 

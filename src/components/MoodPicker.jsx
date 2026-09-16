@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Shuffle, Sparkles } from 'lucide-react';
+import { Shuffle } from 'lucide-react';
 import { useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { matchMoodFromText } from '../config/moods';
 
 // Example searches — tap to fill the box and run it. They teach by doing:
 // each one shows the kind of everyday language the AI understands.
@@ -16,50 +15,43 @@ const EXAMPLES = [
 /**
  * MoodPicker — Search-first hero section:
  * 1. Headline
- * 2. Free-text input read by Gemini (via a Convex action, key stays
- *    server-side), with keyword matching as the offline fallback
+ * 2. Free-text input: Gemini names real films for ANY feeling (via the
+ *    aiRecommend Convex action — keys stay server-side), TMDB verifies
+ *    each title before it reaches the screen
  * 3. Example searches + "Surprise me" for zero-effort discovery
  *
- * Also shows an API key warning if TMDB isn't configured yet.
+ * Results flow up through onResults({ movies, reason }); failures through
+ * onSearchError(message); spinner state through onSearchLoading(bool).
  */
-export default function MoodPicker({ t, onMoodSelect, onSurprise, apiReady }) {
+export default function MoodPicker({
+  t,
+  onResults,
+  onSearchLoading,
+  onSearchError,
+  onSurprise,
+  apiReady,
+}) {
   const [freeText, setFreeText] = useState('');
-  const [noMatch, setNoMatch] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiNote, setAiNote] = useState(null);
-  const detectMood = useAction(api.moodAi.detectMood);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const recommend = useAction(api.aiRecommend.recommend);
 
   async function runSearch(text) {
     const query = text.trim();
-    if (!query || aiLoading) return;
-    setNoMatch(false);
-    setAiNote(null);
-
-    // 1. Ask Gemini first (server-side action — API key never hits the browser)
-    setAiLoading(true);
+    if (!query || busy) return;
+    setError(null);
+    setBusy(true);
+    onSearchLoading(true);
     try {
-      const ai = await detectMood({ text: query });
-      if (ai?.moodId) {
-        onMoodSelect(ai.moodId);
-        setAiNote(
-          `✨ ${ai.reason ?? 'Picked for you'}` +
-            (typeof ai.confidence === 'number' ? ` (${ai.confidence}%)` : '')
-        );
-        return;
-      }
-    } catch {
-      // AI unreachable — fall through to keywords below
+      const result = await recommend({ text: query });
+      onResults({ movies: result.movies ?? [], reason: result.reason ?? null });
+    } catch (err) {
+      const message =
+        err?.data?.message ?? err?.message ?? 'Search hiccup — try again.';
+      setError(message);
+      onSearchError(message);
     } finally {
-      setAiLoading(false);
-    }
-
-    // 2. Keyword fallback (also covers AI downtime)
-    const matched = matchMoodFromText(query);
-    if (matched) {
-      onMoodSelect(matched);
-    } else {
-      setNoMatch(true);
-      onMoodSelect(null);
+      setBusy(false);
     }
   }
 
@@ -74,10 +66,8 @@ export default function MoodPicker({ t, onMoodSelect, onSurprise, apiReady }) {
   }
 
   function surpriseMe() {
-    setNoMatch(false);
-    setAiNote(null);
+    setError(null);
     setFreeText('');
-    // True random movies (handled by the parent) — not a random mood
     if (onSurprise) onSurprise();
   }
 
@@ -95,7 +85,7 @@ export default function MoodPicker({ t, onMoodSelect, onSurprise, apiReady }) {
         What do you feel like watching tonight?
       </h1>
       <p style={{ color: t.muted, fontSize: 16, margin: '0 0 32px', lineHeight: 1.5 }}>
-        Describe it in your own words — the AI reads the feeling, no genres required.
+        Describe it in your own words — the AI picks real films for exactly that feeling.
       </p>
 
       {/* API key warning */}
@@ -151,7 +141,7 @@ export default function MoodPicker({ t, onMoodSelect, onSurprise, apiReady }) {
         />
         <button
           type="submit"
-          disabled={aiLoading}
+          disabled={busy}
           style={{
             background: t.accent,
             color: '#151A24',
@@ -160,34 +150,17 @@ export default function MoodPicker({ t, onMoodSelect, onSurprise, apiReady }) {
             padding: '0 20px',
             fontWeight: 600,
             fontSize: 15,
-            cursor: aiLoading ? 'wait' : 'pointer',
-            opacity: aiLoading ? 0.7 : 1,
+            cursor: busy ? 'wait' : 'pointer',
+            opacity: busy ? 0.7 : 1,
           }}
         >
-          {aiLoading ? 'Reading…' : 'Find movies'}
+          {busy ? 'Reading…' : 'Find movies'}
         </button>
       </form>
 
-      {aiNote && (
-        <p
-          style={{
-            color: t.accent,
-            fontSize: 13.5,
-            marginTop: 0,
-            marginBottom: 16,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-          }}
-        >
-          <Sparkles size={13} /> {aiNote}
-        </p>
-      )}
-
-      {noMatch && (
-        <p style={{ color: t.muted, fontSize: 14, marginTop: 0, marginBottom: 16 }}>
-          Couldn't quite place that feeling — try different words, or hit Surprise me:
+      {error && (
+        <p style={{ color: t.accent, fontSize: 13.5, marginTop: 0, marginBottom: 16 }}>
+          {error}
         </p>
       )}
 
