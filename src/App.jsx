@@ -7,7 +7,7 @@
 //   local state when signed out
 // ---------------------------------------------------------------------------
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useConvexAuth } from 'convex/react';
 import { api } from '../convex/_generated/api';
 import THEMES from './config/theme';
@@ -17,6 +17,7 @@ import Header from './components/Header';
 import MoodPicker from './components/MoodPicker';
 import MovieGrid from './components/MovieGrid';
 import MovieDetails from './components/MovieDetails';
+import FavoritesDrawer from './components/FavoritesDrawer';
 
 export default function App() {
   const { isAuthenticated } = useConvexAuth();
@@ -46,6 +47,20 @@ export default function App() {
 
   // Opened movie (details overlay). Null = grid view.
   const [selectedMovie, setSelectedMovie] = useState(null);
+
+  // Favorites drawer (right slide-over)
+  const [favOpen, setFavOpen] = useState(false);
+
+  // Cursor-reactive glow: writes CSS vars straight to the DOM node,
+  // so the spotlight follows the mouse with zero React re-renders
+  const rootRef = useRef(null);
+  const handleMouseMove = useCallback((e) => {
+    const el = rootRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--mx', `${e.clientX - r.left}px`);
+    el.style.setProperty('--my', `${e.clientY - r.top}px`);
+  }, []);
 
   const themeName =
     isAuthenticated && prefs?.theme ? prefs.theme : localTheme;
@@ -186,11 +201,26 @@ export default function App() {
       ? favoritesList
       : viewing.movies.filter((m) => localFavorites.has(m.id));
 
+  // Drawer items need poster/title — Convex rows carry them, signed-out
+  // rows resolve against the movies currently on screen
+  const favoriteItems =
+    isAuthenticated && favoritesList
+      ? favoritesList.map((f) => ({
+          id: f.tmdbId,
+          title: f.title,
+          poster_path: f.posterPath ?? null,
+          release_date: null,
+          vote_average: null,
+        }))
+      : viewing.movies.filter((m) => localFavorites.has(m.id));
+
   const showResults =
     viewing.loading || viewing.error || viewing.movies.length > 0;
 
   return (
     <div
+      ref={rootRef}
+      onMouseMove={handleMouseMove}
       style={{
         minHeight: '100vh',
         background: t.bg,
@@ -199,9 +229,11 @@ export default function App() {
         transition: 'background 0.25s ease, color 0.25s ease',
         position: 'relative',
         isolation: 'isolate',
+        '--mx': '50vw',
+        '--my': '20vh',
       }}
     >
-      {/* Cinematic backdrop: spotlight glow + vignette + film grain */}
+      {/* Cinematic glass backdrop: aurora blobs + cursor glow + vignette + grain */}
       <div
         aria-hidden
         style={{
@@ -209,14 +241,64 @@ export default function App() {
           inset: 0,
           zIndex: -1,
           pointerEvents: 'none',
-          background:
-            themeName === 'dark'
-              ? `radial-gradient(ellipse 90% 55% at 50% -10%, ${t.accent}26, transparent 70%),` +
-                ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 55%, rgba(0,0,0,0.5) 100%)`
-              : `radial-gradient(ellipse 90% 55% at 50% -10%, #ffffffcc, transparent 70%),` +
-                ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 60%, rgba(21,26,36,0.12) 100%)`,
+          overflow: 'hidden',
         }}
-      />
+      >
+        {/* Drifting aurora blobs */}
+        <div
+          className="aurora-a"
+          style={{
+            position: 'absolute',
+            width: '55vmax',
+            height: '55vmax',
+            left: '-15vmax',
+            top: '-20vmax',
+            borderRadius: '50%',
+            filter: 'blur(90px)',
+            background:
+              themeName === 'dark'
+                ? `${t.accent}2E`
+                : '#ffd9c455',
+            animation: 'driftA 26s ease-in-out infinite alternate',
+          }}
+        />
+        <div
+          className="aurora-b"
+          style={{
+            position: 'absolute',
+            width: '50vmax',
+            height: '50vmax',
+            right: '-18vmax',
+            top: '30vh',
+            borderRadius: '50%',
+            filter: 'blur(100px)',
+            background:
+              themeName === 'dark' ? '#4a6bff26' : '#bcd0ff66',
+            animation: 'driftB 32s ease-in-out infinite alternate',
+          }}
+        />
+        {/* Cursor-following glass glow */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: `radial-gradient(520px circle at var(--mx, 50vw) var(--my, 20vh), ${t.accent}30, transparent 70%)`,
+          }}
+        />
+        {/* Static spotlight + vignette */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background:
+              themeName === 'dark'
+                ? `radial-gradient(ellipse 90% 55% at 50% -10%, ${t.accent}1F, transparent 70%),` +
+                  ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 55%, rgba(0,0,0,0.5) 100%)`
+                : `radial-gradient(ellipse 90% 55% at 50% -10%, #ffffffcc, transparent 70%),` +
+                  ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 60%, rgba(21,26,36,0.12) 100%)`,
+          }}
+        />
+      </div>
       <div
         aria-hidden
         style={{
@@ -234,6 +316,14 @@ export default function App() {
         .mood-btn { transition: border-color 0.15s ease, color 0.15s ease; }
         .theme-toggle { transition: background 0.15s ease, transform 0.1s ease; }
         .theme-toggle:active { transform: scale(0.94); }
+        @keyframes driftA {
+          from { transform: translate(0, 0) scale(1); }
+          to { transform: translate(9vmax, 7vmax) scale(1.15); }
+        }
+        @keyframes driftB {
+          from { transform: translate(0, 0) scale(1.1); }
+          to { transform: translate(-8vmax, -6vmax) scale(0.95); }
+        }
         .card {
           animation: rise 0.35s ease both;
           position: relative;
@@ -245,13 +335,21 @@ export default function App() {
           to { opacity: 1; transform: translateY(0); }
         }
         @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+        @media (prefers-reduced-motion: reduce) { .aurora-a, .aurora-b { animation: none; } }
         input::placeholder { color: ${t.muted}; opacity: 0.8; }
         .exclude-btn { transition: opacity 0.15s ease, color 0.15s ease; opacity: 0.55; }
         .exclude-btn:hover { opacity: 1; color: ${t.accent}; }
         img { user-select: none; -webkit-user-drag: none; }
       `}</style>
 
-      <Header theme={themeName} t={t} onToggleTheme={toggleTheme} onHome={handleHome} />
+      <Header
+        theme={themeName}
+        t={t}
+        onToggleTheme={toggleTheme}
+        onHome={handleHome}
+        onOpenFavorites={() => setFavOpen(true)}
+        favCount={favoriteIds.size}
+      />
 
       <MoodPicker
         t={t}
@@ -325,6 +423,21 @@ export default function App() {
           movie={selectedMovie}
           t={t}
           onClose={() => setSelectedMovie(null)}
+        />
+      )}
+
+      {/* Favorites drawer */}
+      {favOpen && (
+        <FavoritesDrawer
+          t={t}
+          items={favoriteItems}
+          persistent={isAuthenticated}
+          onClose={() => setFavOpen(false)}
+          onView={(m) => {
+            setSelectedMovie(m);
+            setFavOpen(false);
+          }}
+          onRemove={handleToggleFavorite}
         />
       )}
 

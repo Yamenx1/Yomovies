@@ -1,4 +1,4 @@
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Heart } from 'lucide-react';
 import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 
 /**
@@ -7,7 +7,7 @@ import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
  * When signed out: shows "Sign In" and "Sign Up" buttons (Clerk modals)
  * When signed in: shows Clerk UserButton
  */
-export default function Header({ theme, t, onToggleTheme, onHome }) {
+export default function Header({ theme, t, onToggleTheme, onHome, onOpenFavorites, favCount }) {
   return (
     <>
       <header
@@ -94,6 +94,50 @@ export default function Header({ theme, t, onToggleTheme, onHome }) {
           <Show when="signed-in">
             <UserButton afterSignOutUrl="/" />
           </Show>
+
+          {/* Favorites */}
+          <button
+            onClick={onOpenFavorites}
+            title="Your favorites"
+            aria-label="Open favorites"
+            style={{
+              background: t.surface,
+              border: `1px solid ${t.border}`,
+              borderRadius: 999,
+              width: 38,
+              height: 38,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: favCount > 0 ? t.accent : t.text,
+              position: 'relative',
+            }}
+          >
+            <Heart size={16} fill={favCount > 0 ? t.accent : 'none'} />
+            {favCount > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: -6,
+                  right: -6,
+                  background: t.accent,
+                  color: '#151A24',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 999,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 4px',
+                }}
+              >
+                {favCount > 99 ? '99+' : favCount}
+              </span>
+            )}
+          </button>
 
           {/* Theme toggle */}
           <button
