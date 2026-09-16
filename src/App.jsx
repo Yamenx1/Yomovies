@@ -197,8 +197,38 @@ export default function App() {
         color: t.text,
         fontFamily: "'Inter', system-ui, sans-serif",
         transition: 'background 0.25s ease, color 0.25s ease',
+        position: 'relative',
+        isolation: 'isolate',
       }}
     >
+      {/* Cinematic backdrop: spotlight glow + vignette + film grain */}
+      <div
+        aria-hidden
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: -1,
+          pointerEvents: 'none',
+          background:
+            themeName === 'dark'
+              ? `radial-gradient(ellipse 90% 55% at 50% -10%, ${t.accent}26, transparent 70%),` +
+                ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 55%, rgba(0,0,0,0.5) 100%)`
+              : `radial-gradient(ellipse 90% 55% at 50% -10%, #ffffffcc, transparent 70%),` +
+                ` radial-gradient(ellipse 130% 110% at 50% 45%, transparent 60%, rgba(21,26,36,0.12) 100%)`,
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: -1,
+          pointerEvents: 'none',
+          opacity: themeName === 'dark' ? 0.07 : 0.05,
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E\")",
+        }}
+      />
       {/* Global styles */}
       <style>{`
         .mood-btn { transition: border-color 0.15s ease, color 0.15s ease; }

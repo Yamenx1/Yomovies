@@ -38,10 +38,10 @@ export default function Header({ theme, t, onToggleTheme, onHome }) {
           />
           <span
             style={{
-              fontFamily: "'Fraunces', serif",
-              fontWeight: 600,
-              fontSize: 17,
-              letterSpacing: 0.2,
+              fontFamily: "'Bebas Neue', 'Inter', sans-serif",
+              fontWeight: 400,
+              fontSize: 24,
+              letterSpacing: 2,
             }}
           >
             Yo Movies

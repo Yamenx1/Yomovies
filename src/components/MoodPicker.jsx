@@ -75,10 +75,11 @@ export default function MoodPicker({
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '40px 20px 0', textAlign: 'center' }}>
       <h1
         style={{
-          fontFamily: "'Fraunces', serif",
-          fontWeight: 600,
-          fontSize: 'clamp(28px, 5vw, 42px)',
-          lineHeight: 1.15,
+          fontFamily: "'Bebas Neue', 'Inter', sans-serif",
+          fontWeight: 400,
+          fontSize: 'clamp(46px, 9vw, 84px)',
+          letterSpacing: 2,
+          lineHeight: 1,
           margin: '0 0 14px',
         }}
       >

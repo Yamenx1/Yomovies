@@ -155,8 +155,11 @@ export default function MovieDetails({ movie, t, onClose }) {
             <div style={{ flex: 1, minWidth: 200 }}>
               <h2
                 style={{
-                  fontFamily: "'Fraunces', serif",
-                  fontSize: 24,
+                  fontFamily: "'Bebas Neue', 'Inter', sans-serif",
+                  fontWeight: 400,
+                  fontSize: 34,
+                  letterSpacing: 1,
+                  lineHeight: 1,
                   margin: '0 0 8px',
                 }}
               >

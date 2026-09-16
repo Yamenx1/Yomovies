@@ -93,10 +93,11 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
         {/* Title */}
         <div
           style={{
-            fontFamily: "'Fraunces', serif",
-            fontWeight: 600,
-            fontSize: 17,
-            lineHeight: 1.25,
+            fontFamily: "'Bebas Neue', 'Inter', sans-serif",
+            fontWeight: 400,
+            fontSize: 22,
+            letterSpacing: 0.8,
+            lineHeight: 1.1,
             marginBottom: 6,
             paddingRight: 28,
           }}
