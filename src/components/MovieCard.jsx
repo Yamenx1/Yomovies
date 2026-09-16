@@ -45,13 +45,19 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
       onClick={() => onSelect?.(movie)}
       title={`View details for ${movie.title}`}
       style={{
-        background: t.surface,
-        border: `1px solid ${t.border}`,
+        // Glass frame: translucent, blurs the ambient backdrop behind it,
+        // soft top highlight + deep shadow so it floats in the scene
+        background: `${t.surface}A6`,
+        backdropFilter: 'blur(18px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(18px) saturate(150%)',
+        border: `1px solid ${t.border}80`,
+        boxShadow:
+          '0 12px 40px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.10)',
         borderRadius: 12,
         animationDelay: `${index * 50}ms`,
         display: 'flex',
         flexDirection: 'column',
-        transition: 'border-color 0.2s ease',
+        transition: 'border-color 0.2s ease, transform 0.2s ease',
         cursor: onSelect ? 'pointer' : 'default',
       }}
     >

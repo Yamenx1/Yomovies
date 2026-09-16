@@ -83,9 +83,13 @@ export default function MovieDetails({ movie, t, onClose }) {
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: t.surface,
+          background: `${t.surface}D9`,
+          backdropFilter: 'blur(28px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(160%)',
           color: t.text,
-          border: `1px solid ${t.border}`,
+          border: `1px solid ${t.border}80`,
+          boxShadow:
+            '0 24px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.10)',
           borderRadius: 16,
           maxWidth: 640,
           width: '100%',
