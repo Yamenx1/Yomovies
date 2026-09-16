@@ -25,6 +25,8 @@ export default function MovieGrid({
   apiReady,
   favoriteIds,
   onToggleFavorite,
+  watchlistIds,
+  onToggleWatchlist,
   onSelect,
 }) {
   return (
@@ -111,13 +113,7 @@ export default function MovieGrid({
 
       {/* Movie grid */}
       {!loading && !error && movies.length > 0 && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-            gap: 20,
-          }}
-        >
+        <div className="movie-grid">
           {movies.map((movie, i) => (
             <MovieCard
               key={movie.id}
@@ -128,6 +124,8 @@ export default function MovieGrid({
               onExclude={onExclude}
               isFavorite={favoriteIds?.has(movie.id)}
               onToggleFavorite={onToggleFavorite}
+              isWatchlisted={watchlistIds?.has(movie.id)}
+              onToggleWatchlist={onToggleWatchlist}
               onSelect={onSelect}
             />
           ))}

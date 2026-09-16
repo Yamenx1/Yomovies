@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Shuffle, Share2, Check, History } from 'lucide-react';
 import { useAction, useQuery, useMutation, useConvexAuth } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { searchMovies, getImageUrl } from '../services/tmdb';
 
 const LOCAL_RECENT_KEY = 'yo-recent-searches';
 const MAX_LOCAL_RECENT = 8;
@@ -48,6 +49,7 @@ export default function MoodPicker({
   onSearchLoading,
   onSearchError,
   onSurprise,
+  onSelectMovie,
   apiReady,
 }) {
   const [freeText, setFreeText] = useState('');
@@ -56,6 +58,10 @@ export default function MoodPicker({
   const [copied, setCopied] = useState(false);
   const [lastQuery, setLastQuery] = useState(null);
   const [localRecent, setLocalRecent] = useState(() => readLocalRecent());
+  // Autocomplete suggestions (direct TMDB title matches)
+  const [suggest, setSuggest] = useState([]);
+  const [sugOpen, setSugOpen] = useState(false);
+  const [sugHi, setSugHi] = useState(-1);
   const recommend = useAction(api.aiRecommend.recommend);
   const { isAuthenticated } = useConvexAuth();
   const serverRecent = useQuery(api.recent.list);
@@ -118,6 +124,7 @@ export default function MoodPicker({
     const query = text.trim();
     if (!query || busy) return;
     setError(null);
+    setSugOpen(false);
     setBusy(true);
     onSearchLoading(true);
     try {
@@ -137,8 +144,55 @@ export default function MoodPicker({
 
   function handleTextSubmit(e) {
     e.preventDefault();
+    if (sugOpen && sugHi >= 0 && suggest[sugHi]) {
+      openSuggestion(suggest[sugHi]);
+      return;
+    }
+    setSugOpen(false);
     runSearch(freeText);
   }
+
+  function openSuggestion(movie) {
+    setSugOpen(false);
+    setFreeText(movie.title);
+    if (onSelectMovie) onSelectMovie(movie);
+  }
+
+  function handleInputKey(e) {
+    if (!sugOpen || suggest.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSugHi((h) => (h + 1) % suggest.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSugHi((h) => (h - 1 + suggest.length) % suggest.length);
+    } else if (e.key === 'Escape') {
+      setSugOpen(false);
+    }
+  }
+
+  // Debounced TMDB title suggestions while typing
+  useEffect(() => {
+    const q = freeText.trim();
+    if (q.length < 2) {
+      setSuggest([]);
+      setSugOpen(false);
+      return;
+    }
+    setSugHi(-1);
+    const timer = setTimeout(() => {
+      searchMovies(q)
+        .then((data) => {
+          const top = (data.results ?? [])
+            .filter((m) => m.poster_path)
+            .slice(0, 6);
+          setSuggest(top);
+          setSugOpen(top.length > 0);
+        })
+        .catch(() => {});
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [freeText]);
 
   function runExample(example) {
     setFreeText(example);
@@ -201,25 +255,87 @@ export default function MoodPicker({
         </div>
       )}
 
-      {/* Free-text input */}
-      <form onSubmit={handleTextSubmit} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <input
-          type="text"
-          value={freeText}
-          onChange={(e) => setFreeText(e.target.value)}
-          placeholder={str.searchPlaceholder}
-          style={{
-            flex: 1,
-            background: t.surface,
-            border: `1px solid ${t.border}`,
-            borderRadius: 8,
-            padding: '13px 16px',
-            color: t.text,
-            fontSize: 15,
-            fontFamily: 'inherit',
-            outline: 'none',
-          }}
-        />
+      {/* Free-text input + autocomplete */}
+      <form
+        onSubmit={handleTextSubmit}
+        className="search-row"
+        style={{ display: 'flex', gap: 8, marginBottom: 16, position: 'relative' }}
+      >
+        <div style={{ flex: 1, position: 'relative' }}>
+          <input
+            type="text"
+            value={freeText}
+            onChange={(e) => setFreeText(e.target.value)}
+            onKeyDown={handleInputKey}
+            onBlur={() => setTimeout(() => setSugOpen(false), 150)}
+            onFocus={() => {
+              if (suggest.length > 0) setSugOpen(true);
+            }}
+            placeholder={str.searchPlaceholder}
+            autoComplete="off"
+            style={{
+              width: '100%',
+              background: t.surface,
+              border: `1px solid ${t.border}`,
+              borderRadius: 8,
+              padding: '13px 16px',
+              color: t.text,
+              fontSize: 15,
+              fontFamily: 'inherit',
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+          {sugOpen && suggest.length > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                left: 0,
+                right: 0,
+                background: `${t.surface}F2`,
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
+                border: `1px solid ${t.border}`,
+                borderRadius: 10,
+                overflow: 'hidden',
+                zIndex: 50,
+                textAlign: 'left',
+              }}
+            >
+              {suggest.map((m, i) => (
+                <div
+                  key={m.id}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    openSuggestion(m);
+                  }}
+                  onMouseEnter={() => setSugHi(i)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 12px',
+                    cursor: 'pointer',
+                    background: i === sugHi ? `${t.accent}22` : 'transparent',
+                  }}
+                >
+                  <img
+                    src={getImageUrl(m.poster_path, 'w92')}
+                    alt=""
+                    style={{ width: 30, borderRadius: 4, flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: 13.5, fontWeight: 600 }}>{m.title}</span>
+                  {m.release_date && (
+                    <span style={{ fontSize: 12, color: t.muted }}>
+                      {new Date(m.release_date).getFullYear()}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           type="submit"
           disabled={busy}

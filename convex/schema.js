@@ -33,6 +33,17 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_tmdb", ["userId", "tmdbId"]),
 
+  // Watch-later titles (bookmark button on cards + details)
+  watchlist: defineTable({
+    userId: v.string(),
+    tmdbId: v.number(),
+    title: v.string(),
+    posterPath: v.optional(v.string()),
+    addedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_tmdb", ["userId", "tmdbId"]),
+
   // Every mood pick, for history / recommendations later
   moodActivity: defineTable({
     userId: v.string(),

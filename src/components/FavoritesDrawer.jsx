@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { getImageUrl } from '../services/tmdb';
 
@@ -6,7 +6,10 @@ import { getImageUrl } from '../services/tmdb';
  * FavoritesDrawer — Glass slide-over panel from the right edge:
  * poster thumb, title, year · tap a row to view details, trash to remove.
  */
-export default function FavoritesDrawer({ t, str, items, persistent, onClose, onView, onRemove }) {
+export default function FavoritesDrawer({ t, str, items, watchItems = [], persistent, onClose, onView, onRemove, onRemoveWatch }) {
+  const [tab, setTab] = useState('fav');
+  const activeItems = tab === 'fav' ? items : watchItems;
+  const activeRemove = tab === 'fav' ? onRemove : onRemoveWatch ?? onRemove;
   // Close on Escape
   useEffect(() => {
     const onKey = (e) => {
@@ -68,7 +71,7 @@ export default function FavoritesDrawer({ t, str, items, persistent, onClose, on
               margin: 0,
             }}
           >
-            {str.favTitle} ({items.length})
+            {tab === 'fav' ? `${str.favTitle} (${items.length})` : `${str.watchTab} (${watchItems.length})`}
           </h2>
           <button
             onClick={onClose}
@@ -90,14 +93,41 @@ export default function FavoritesDrawer({ t, str, items, persistent, onClose, on
           </button>
         </div>
 
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 8, padding: '12px 20px 0' }}>
+          {[
+            { id: 'fav', label: `${str.favTab} (${items.length})` },
+            { id: 'watch', label: `${str.watchTab} (${watchItems.length})` },
+          ].map((tb) => (
+            <button
+              key={tb.id}
+              onClick={() => setTab(tb.id)}
+              style={{
+                flex: 1,
+                background: tab === tb.id ? `${t.accent}22` : 'none',
+                border: `1px solid ${tab === tb.id ? t.accent : t.border}`,
+                color: tab === tb.id ? t.text : t.muted,
+                borderRadius: 999,
+                padding: '7px 10px',
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {tb.label}
+            </button>
+          ))}
+        </div>
+
         {/* List */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
-          {items.length === 0 && (
+          {activeItems.length === 0 && (
             <p style={{ color: t.muted, fontSize: 14, textAlign: 'center', marginTop: 40 }}>
               {str.favEmpty}
             </p>
           )}
-          {items.map((m) => {
+          {activeItems.map((m) => {
             const poster = getImageUrl(m.poster_path, 'w92');
             const year = m.release_date ? new Date(m.release_date).getFullYear() : null;
             return (
@@ -157,7 +187,7 @@ export default function FavoritesDrawer({ t, str, items, persistent, onClose, on
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRemove(m);
+                    activeRemove(m);
                   }}
                   aria-label={str.removeFavorite(m.title)}
                   title={str.removeFavorite(m.title)}

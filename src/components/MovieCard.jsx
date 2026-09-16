@@ -1,4 +1,4 @@
-import { Star, Heart } from 'lucide-react';
+import { Star, Heart, Bookmark } from 'lucide-react';
 import { getImageUrl } from '../services/tmdb';
 
 // TMDB genre ID → readable name mapping
@@ -23,7 +23,7 @@ export const GENRE_MAP = {
  * We combine it with their image CDN to get the full URL:
  * https://image.tmdb.org/t/p/w500/abc123.jpg
  */
-export default function MovieCard({ movie, t, str, index, onExclude, isFavorite, onToggleFavorite, onSelect }) {
+export default function MovieCard({ movie, t, str, index, onExclude, isFavorite, onToggleFavorite, isWatchlisted, onToggleWatchlist, onSelect }) {
   const posterUrl = getImageUrl(movie.poster_path, 'w342');
   const year = movie.release_date ? new Date(movie.release_date).getFullYear() : '—';
   const rating = movie.vote_average ? movie.vote_average.toFixed(1) : '—';
@@ -197,7 +197,7 @@ export default function MovieCard({ movie, t, str, index, onExclude, isFavorite,
             backdropFilter: 'blur(4px)',
             border: 'none',
             cursor: 'pointer',
-            padding: '6px',
+            padding: '8px',
             borderRadius: 999,
             display: 'flex',
             alignItems: 'center',
@@ -208,6 +208,38 @@ export default function MovieCard({ movie, t, str, index, onExclude, isFavorite,
             size={14}
             fill={isFavorite ? t.accent : 'none'}
             stroke={isFavorite ? t.accent : '#fff'}
+          />
+        </button>
+      )}
+
+      {/* Watch-later button (persisted in Convex when signed in) */}
+      {onToggleWatchlist && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleWatchlist(movie);
+          }}
+          aria-label={isWatchlisted ? str.watchRemove(movie.title) : str.watchSave(movie.title)}
+          title={isWatchlisted ? str.watchRemove(movie.title) : str.watchSave(movie.title)}
+          style={{
+            position: 'absolute',
+            top: 46,
+            left: 10,
+            background: 'rgba(0,0,0,0.55)',
+            backdropFilter: 'blur(4px)',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '8px',
+            borderRadius: 999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Bookmark
+            size={14}
+            fill={isWatchlisted ? t.accent : 'none'}
+            stroke={isWatchlisted ? t.accent : '#fff'}
           />
         </button>
       )}
@@ -230,7 +262,7 @@ export default function MovieCard({ movie, t, str, index, onExclude, isFavorite,
           border: 'none',
           color: '#fff',
           cursor: 'pointer',
-          padding: '6px',
+          padding: '8px',
           borderRadius: 999,
           display: 'flex',
           alignItems: 'center',

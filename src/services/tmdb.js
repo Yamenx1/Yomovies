@@ -161,6 +161,31 @@ export async function getMovieVideos(movieId) {
 }
 
 /**
+ * Get streaming/rent/buy providers for a movie, by country.
+ * Returns TMDB's { results: { SA: { flatrate: [...], rent, buy }, ... } }.
+ */
+export async function getWatchProviders(movieId) {
+  return fetchFromTMDB(`/movie/${movieId}/watch/providers`);
+}
+
+/**
+ * Pick the provider entry for the viewer's region (Saudi default,
+ * with sane fallbacks). Returns { providers, region } — providers have
+ * { provider_id, provider_name, logo_path }.
+ */
+export function pickProviders(watchData, region = 'SA') {
+  const results = watchData?.results ?? {};
+  const entry =
+    results[region] ?? results.US ?? Object.values(results)[0] ?? null;
+  if (!entry) return { providers: [], region };
+  const seen = new Map();
+  for (const p of [...(entry.flatrate ?? []), ...(entry.rent ?? []), ...(entry.buy ?? [])]) {
+    if (!seen.has(p.provider_id)) seen.set(p.provider_id, p);
+  }
+  return { providers: [...seen.values()].slice(0, 6), region };
+}
+
+/**
  * Get movies similar to the given one.
  *
  * @param {number} movieId - TMDB movie ID
@@ -194,7 +219,7 @@ export function pickTrailerKey(videos) {
  * @returns {Promise<object>} - { results: [...movies], ... }
  */
 export async function searchMovies(query) {
-  return fetchFromTMDB('/search/movie', { query });
+  return fetchFromTMDB('/search/movie', { query, include_adult: 'false' });
 }
 
 /**

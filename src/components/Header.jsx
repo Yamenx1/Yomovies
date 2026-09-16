@@ -15,6 +15,8 @@ export default function Header({ theme, t, str, lang, onToggleLang, onToggleThem
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          rowGap: 12,
           maxWidth: 960,
           margin: '0 auto',
           padding: '24px 20px 0',

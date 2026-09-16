@@ -5,6 +5,8 @@ import {
   getMovieCredits,
   getMovieVideos,
   getSimilarMovies,
+  getWatchProviders,
+  pickProviders,
   getImageUrl,
   pickTrailerKey,
 } from '../services/tmdb';
@@ -16,11 +18,12 @@ import { GENRE_MAP } from './MovieCard';
  * overview, top cast, and a "More like this" rail. Fetched live from TMDB
  * on open (cached by the tmdb service).
  */
-export default function MovieDetails({ movie, t, str, onClose, onSelectMovie }) {
+export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, isWatchlisted, onToggleWatchlist }) {
   const [details, setDetails] = useState(null);
   const [credits, setCredits] = useState(null);
   const [trailerKey, setTrailerKey] = useState(null);
   const [similar, setSimilar] = useState([]);
+  const [providers, setProviders] = useState([]);
   const [showTrailer, setShowTrailer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -32,13 +35,15 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie }) 
     setShowTrailer(false);
     setTrailerKey(null);
     setSimilar([]);
+    setProviders([]);
     Promise.all([
       getMovieDetails(movie.id),
       getMovieCredits(movie.id),
       getMovieVideos(movie.id).catch(() => null),
       getSimilarMovies(movie.id).catch(() => null),
+      getWatchProviders(movie.id).catch(() => null),
     ])
-      .then(([d, c, v, s]) => {
+      .then(([d, c, v, s, w]) => {
         if (!cancelled) {
           setDetails(d);
           setCredits(c);
@@ -46,6 +51,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie }) 
           setSimilar(
             (s?.results ?? []).filter((m) => m.poster_path).slice(0, 10)
           );
+          setProviders(pickProviders(w).providers);
           setLoading(false);
         }
       })
@@ -349,6 +355,42 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie }) 
             </>
           )}
 
+          {/* Where to watch */}
+          {providers.length > 0 && (
+            <>
+              <h3 style={{ fontSize: 14, color: t.muted, margin: '20px 0 10px' }}>
+                {str.whereToWatch ?? 'Where to watch'}
+              </h3>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {providers.map((p) => (
+                  <span
+                    key={p.provider_id}
+                    title={p.provider_name}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 7,
+                      background: `${t.accent}12`,
+                      border: `1px solid ${t.border}`,
+                      borderRadius: 999,
+                      padding: '4px 12px 4px 4px',
+                      fontSize: 12,
+                    }}
+                  >
+                    {p.logo_path && (
+                      <img
+                        src={getImageUrl(p.logo_path, 'w92')}
+                        alt=""
+                        style={{ width: 24, height: 24, borderRadius: 999 }}
+                      />
+                    )}
+                    {p.provider_name}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+
           {/* More like this */}
           {similar.length > 0 && (
             <>
@@ -402,6 +444,26 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie }) 
           >
             {str.backToPicks}
           </button>
+          {onToggleWatchlist && (
+            <button
+              onClick={onToggleWatchlist}
+              style={{
+                marginTop: 24,
+                marginLeft: 10,
+                background: 'none',
+                border: `1px solid ${t.border}`,
+                borderRadius: 8,
+                padding: '10px 22px',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+                color: isWatchlisted ? t.accent : t.text,
+                fontFamily: 'inherit',
+              }}
+            >
+              {isWatchlisted ? str.inWatchlist : str.watchLaterBtn}
+            </button>
+          )}
         </div>
       </div>
     </div>

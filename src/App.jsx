@@ -48,17 +48,21 @@ export default function App() {
   const prefs = useQuery(api.preferences.get);
   const watchedList = useQuery(api.watched.list);
   const favoritesList = useQuery(api.favorites.list);
+  const watchlistList = useQuery(api.watchlist.list);
 
   const setPrefs = useMutation(api.preferences.set);
   const addWatched = useMutation(api.watched.add);
   const clearWatched = useMutation(api.watched.clear);
   const addFavorite = useMutation(api.favorites.add);
   const removeFavorite = useMutation(api.favorites.remove);
+  const addWatchlist = useMutation(api.watchlist.add);
+  const removeWatchlist = useMutation(api.watchlist.remove);
 
   // --- Local fallback state (signed-out + instant UI) ---
   const [localTheme, setLocalTheme] = useState('dark');
   const [localExcluded, setLocalExcluded] = useState(() => new Set());
   const [localFavorites, setLocalFavorites] = useState(() => new Set());
+  const [localWatchlist, setLocalWatchlist] = useState(() => new Set());
 
   // AI search results (null = nothing searched yet)
   const [search, setSearch] = useState(null);
@@ -70,28 +74,39 @@ export default function App() {
   // Opened movie (details overlay). Null = grid view.
   const [selectedMovie, setSelectedMovie] = useState(null);
 
+  // Result filters (reset on every new search / surprise / home)
+  const [minRating, setMinRating] = useState(0);
+  const [era, setEra] = useState('any');
+  const [familyOnly, setFamilyOnly] = useState(false);
+  const resetFilters = useCallback(() => {
+    setMinRating(0);
+    setEra('any');
+    setFamilyOnly(false);
+  }, []);
+
   // Favorites drawer (right slide-over)
   const [favOpen, setFavOpen] = useState(false);
 
-  // Poster wall for the landing backdrop (Netflix-style tilted collage).
-  // Real TMDB trending posters; falls back to the aurora if unavailable.
-  const [collage, setCollage] = useState([]);
+  // Poster wall + trending rail (Netflix-style). Real TMDB trending
+  // posters; falls back to the aurora if unavailable.
+  const [trending, setTrending] = useState([]);
   useEffect(() => {
     let cancelled = false;
     Promise.all([getTrending('week', 1), getTrending('week', 2)])
       .then(([a, b]) => {
         if (cancelled) return;
-        const posters = [...(a.results ?? []), ...(b.results ?? [])]
-          .map((m) => m.poster_path)
-          .filter(Boolean)
-          .slice(0, 18);
-        setCollage(posters.map((p) => getImageUrl(p, 'w342')));
+        const seen = new Map();
+        for (const m of [...(a.results ?? []), ...(b.results ?? [])]) {
+          if (m.poster_path && !seen.has(m.id)) seen.set(m.id, m);
+        }
+        setTrending([...seen.values()].slice(0, 18));
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
+  const collage = trending.map((m) => getImageUrl(m.poster_path, 'w342'));
 
   // Cursor-reactive glow: writes CSS vars straight to the DOM node,
   // so the spotlight follows the mouse with zero React re-renders
@@ -117,6 +132,11 @@ export default function App() {
       ? new Set(favoritesList.map((f) => f.tmdbId))
       : localFavorites;
 
+  const watchlistIds =
+    isAuthenticated && watchlistList
+      ? new Set(watchlistList.map((f) => f.tmdbId))
+      : localWatchlist;
+
   const t = THEMES[themeName] ?? THEMES.dark;
 
   // What the grid shows: surprise hand wins, otherwise the latest search
@@ -139,8 +159,23 @@ export default function App() {
           badge: str.badgeAi,
         };
 
-  // Filter out watched/excluded movies
-  const filteredMovies = viewing.movies.filter((m) => !excludedSet.has(m.id));
+  // Filter out watched/excluded movies + apply rating/era/family filters
+  const yearOf = (m) => (m.release_date ? new Date(m.release_date).getFullYear() : null);
+  const filteredMovies = viewing.movies
+    .filter((m) => (m.vote_average ?? 0) >= minRating)
+    .filter((m) => {
+      if (era === 'any') return true;
+      const y = yearOf(m);
+      if (y == null) return false;
+      if (era === 'classic') return y < 2000;
+      if (era === 'modern') return y >= 2000 && y <= 2015;
+      return y >= 2016;
+    })
+    .filter(
+      (m) =>
+        !familyOnly || (m.genre_ids ?? []).some((g) => g === 10751 || g === 16)
+    )
+    .filter((m) => !excludedSet.has(m.id));
 
   // --- Callbacks ---
   const toggleTheme = useCallback(() => {
@@ -157,7 +192,8 @@ export default function App() {
     setSearch({ ...results, loading: false, error: null });
     setSelectedMovie(null); // close any open details
     setSurpriseSeed(null); // leave surprise mode
-  }, []);
+    resetFilters();
+  }, [resetFilters]);
 
   const handleSearchLoading = useCallback((loading) => {
     setSearch((prev) => ({ ...(prev ?? { movies: [] }), loading, error: null }));
@@ -179,15 +215,17 @@ export default function App() {
   const handleSurprise = useCallback(() => {
     setSearch(null);
     setSelectedMovie(null);
+    resetFilters();
     setSurpriseSeed(Date.now());
-  }, []);
+  }, [resetFilters]);
 
   // Logo / site name → back to the main menu
   const handleHome = useCallback(() => {
     setSearch(null);
     setSelectedMovie(null);
     setSurpriseSeed(null);
-  }, []);
+    resetFilters();
+  }, [resetFilters]);
 
   const handleExclude = useCallback(
     (movie) => {
@@ -235,6 +273,30 @@ export default function App() {
     [isAuthenticated, favoriteIds, addFavorite, removeFavorite]
   );
 
+  const handleToggleWatchlist = useCallback(
+    (movie) => {
+      if (isAuthenticated) {
+        if (watchlistIds.has(movie.id)) {
+          removeWatchlist({ tmdbId: movie.id }).catch(() => {});
+        } else {
+          addWatchlist({
+            tmdbId: movie.id,
+            title: movie.title,
+            posterPath: movie.poster_path ?? undefined,
+          }).catch(() => {});
+        }
+      } else {
+        setLocalWatchlist((prev) => {
+          const next = new Set(prev);
+          if (next.has(movie.id)) next.delete(movie.id);
+          else next.add(movie.id);
+          return next;
+        });
+      }
+    },
+    [isAuthenticated, watchlistIds, addWatchlist, removeWatchlist]
+  );
+
   // Check if API key is configured
   const apiReady = isApiKeyConfigured();
 
@@ -252,16 +314,18 @@ export default function App() {
 
   // Drawer items need poster/title — Convex rows carry them, signed-out
   // rows resolve against the movies currently on screen
-  const favoriteItems =
-    isAuthenticated && favoritesList
-      ? favoritesList.map((f) => ({
+  const toDrawerItems = (rows, localSet) =>
+    isAuthenticated && rows
+      ? rows.map((f) => ({
           id: f.tmdbId,
           title: f.title,
           poster_path: f.posterPath ?? null,
           release_date: null,
           vote_average: null,
         }))
-      : viewing.movies.filter((m) => localFavorites.has(m.id));
+      : viewing.movies.filter((m) => localSet.has(m.id));
+  const favoriteItems = toDrawerItems(favoritesList, localFavorites);
+  const watchlistItems = toDrawerItems(watchlistList, localWatchlist);
 
   const showResults =
     viewing.loading || viewing.error || viewing.movies.length > 0;
@@ -453,6 +517,17 @@ export default function App() {
         .mood-btn { transition: border-color 0.15s ease, color 0.15s ease; }
         .theme-toggle { transition: background 0.15s ease, transform 0.1s ease; }
         .theme-toggle:active { transform: scale(0.94); }
+        .movie-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 20px;
+        }
+        @media (max-width: 560px) {
+          .movie-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+          .search-row { flex-wrap: wrap; }
+          .search-row input { flex: 1 1 100%; }
+          .search-row button[type="submit"] { flex: 1; padding: 12px 20px; }
+        }
         @keyframes driftA {
           from { transform: translate(0, 0) scale(1); }
           to { transform: translate(9vmax, 7vmax) scale(1.15); }
@@ -508,8 +583,48 @@ export default function App() {
         onSearchLoading={handleSearchLoading}
         onSearchError={handleSearchError}
         onSurprise={handleSurprise}
+        onSelectMovie={setSelectedMovie}
         apiReady={apiReady}
       />
+
+      {/* Trending rail (landing only — doubles as instant details entry) */}
+      {!showResults && trending.length > 0 && (
+        <div style={{ maxWidth: 960, margin: '0 auto', padding: '34px 20px 0' }}>
+          <h3 style={{ fontSize: 14, color: t.muted, margin: '0 0 12px' }}>
+            {str.trendingTitle}
+          </h3>
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              overflowX: 'auto',
+              paddingBottom: 10,
+              scrollSnapType: 'x mandatory',
+            }}
+          >
+            {trending.map((m) => (
+              <img
+                key={m.id}
+                src={getImageUrl(m.poster_path, 'w185')}
+                alt={m.title}
+                title={m.title}
+                loading="lazy"
+                onClick={() => setSelectedMovie(m)}
+                style={{
+                  width: 110,
+                  aspectRatio: '2 / 3',
+                  objectFit: 'cover',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  scrollSnapAlign: 'start',
+                  border: `1px solid ${t.border}`,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Favorites strip (persisted in Convex when signed in) */}
       {favoritesForRow.length > 0 && (
@@ -551,7 +666,92 @@ export default function App() {
 
       {/* Movie results */}
       {showResults && (
-        <MovieGrid
+        <>
+          {/* Filters */}
+          <div
+            style={{
+              maxWidth: 960,
+              margin: '0 auto',
+              padding: '0 20px 14px',
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <select
+              value={minRating}
+              onChange={(e) => setMinRating(Number(e.target.value))}
+              aria-label={str.minRating}
+              style={{
+                background: t.surface,
+                border: `1px solid ${t.border}`,
+                borderRadius: 999,
+                padding: '6px 12px',
+                fontSize: 12.5,
+                color: t.text,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <option value={0}>{str.anyRating} ★</option>
+              <option value={6}>★ 6+</option>
+              <option value={7}>★ 7+</option>
+              <option value={8}>★ 8+</option>
+            </select>
+            <select
+              value={era}
+              onChange={(e) => setEra(e.target.value)}
+              style={{
+                background: t.surface,
+                border: `1px solid ${t.border}`,
+                borderRadius: 999,
+                padding: '6px 12px',
+                fontSize: 12.5,
+                color: t.text,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              <option value="any">{str.eraAny}</option>
+              <option value="classic">{str.eraClassic}</option>
+              <option value="modern">{str.eraModern}</option>
+              <option value="recent">{str.eraRecent}</option>
+            </select>
+            <button
+              onClick={() => setFamilyOnly((v) => !v)}
+              style={{
+                background: familyOnly ? `${t.accent}22` : 'none',
+                border: `1px solid ${familyOnly ? t.accent : t.border}`,
+                borderRadius: 999,
+                padding: '6px 14px',
+                fontSize: 12.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+                color: familyOnly ? t.text : t.muted,
+                fontFamily: 'inherit',
+              }}
+            >
+              {str.familyOnly}
+            </button>
+            {(minRating > 0 || era !== 'any' || familyOnly) && (
+              <button
+                onClick={resetFilters}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: t.accent,
+                  fontSize: 12.5,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {str.resetFilters}
+              </button>
+            )}
+          </div>
+          <MovieGrid
           t={t}
           str={str}
           movies={filteredMovies}
@@ -565,6 +765,8 @@ export default function App() {
           apiReady={apiReady}
           favoriteIds={favoriteIds}
           onToggleFavorite={handleToggleFavorite}
+          watchlistIds={watchlistIds}
+          onToggleWatchlist={handleToggleWatchlist}
           onSelect={setSelectedMovie}
         />
       )}
@@ -577,6 +779,8 @@ export default function App() {
           str={str}
           onClose={() => setSelectedMovie(null)}
           onSelectMovie={setSelectedMovie}
+          isWatchlisted={watchlistIds.has(selectedMovie.id)}
+          onToggleWatchlist={() => handleToggleWatchlist(selectedMovie)}
         />
       )}
 
@@ -586,6 +790,7 @@ export default function App() {
           t={t}
           str={str}
           items={favoriteItems}
+          watchItems={watchlistItems}
           persistent={isAuthenticated}
           onClose={() => setFavOpen(false)}
           onView={(m) => {
@@ -593,7 +798,34 @@ export default function App() {
             setFavOpen(false);
           }}
           onRemove={handleToggleFavorite}
+          onRemoveWatch={handleToggleWatchlist}
         />
+      )}
+
+      {/* Your shelf — counts from favorites / watchlist / seen */}
+      {(favoriteIds.size > 0 || watchlistIds.size > 0 || excludedSet.size > 0) && (
+        <div
+          style={{
+            maxWidth: 960,
+            margin: '0 auto',
+            padding: '6px 20px 0',
+            textAlign: 'center',
+            color: t.muted,
+            fontSize: 13,
+            display: 'flex',
+            gap: 16,
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
+          {favoriteIds.size > 0 && <span>♥ {favoriteIds.size}</span>}
+          {watchlistIds.size > 0 && <span>🔖 {watchlistIds.size}</span>}
+          {excludedSet.size > 0 && (
+            <span>
+              ✓ {excludedSet.size} {str.statsSeen}
+            </span>
+          )}
+        </div>
       )}
 
       {/* TMDB Attribution — required by their terms of service */}
