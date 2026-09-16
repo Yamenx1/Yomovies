@@ -23,6 +23,14 @@ export const detectMood = action({
     if (!apiKey) return { moodId: null, error: "AI_MISSING_KEY" };
 
     const model = process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
+    // Lite models reject thinkingConfig — only send it for full models,
+    // where an unbounded thinking trace otherwise eats the JSON budget
+    const generationConfig = {
+      responseMimeType: "application/json",
+      maxOutputTokens: 500,
+      temperature: 0,
+      ...(!model.includes("lite") ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+    };
     const moodList = MOODS.map((m) => `- ${m.id}: ${m.label} (${m.hint})`).join("\n");
     const basePrompt =
       `You classify what kind of movie fits someone's current feeling.\n\n` +
@@ -51,14 +59,7 @@ export const detectMood = action({
             },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                responseMimeType: "application/json",
-                maxOutputTokens: 500,
-                temperature: 0,
-                // Thinking tokens eat the output budget and truncate the
-                // JSON — this classification needs no reasoning trace
-                thinkingConfig: { thinkingBudget: 0 },
-              },
+              generationConfig,
             }),
           }
         );
