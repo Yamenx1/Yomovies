@@ -45,6 +45,22 @@ function readGuestMeta() {
   }
 }
 
+// Guest id-sets (hearts/watchlist) persist per browser so the taste
+// profile survives reloads without an account
+function readGuestSet(key) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? '[]');
+    return new Set(Array.isArray(raw) ? raw.filter((n) => typeof n === 'number') : []);
+  } catch {
+    return new Set();
+  }
+}
+function writeGuestSet(key, set) {
+  try {
+    localStorage.setItem(key, JSON.stringify([...set]));
+  } catch {}
+}
+
 export default function App() {
   const { isAuthenticated } = useConvexAuth();
 
@@ -86,8 +102,8 @@ export default function App() {
   // --- Local fallback state (signed-out + instant UI) ---
   const [localTheme, setLocalTheme] = useState('dark');
   const [localExcluded, setLocalExcluded] = useState(() => new Set());
-  const [localFavorites, setLocalFavorites] = useState(() => new Set());
-  const [localWatchlist, setLocalWatchlist] = useState(() => new Set());
+  const [localFavorites, setLocalFavorites] = useState(() => readGuestSet('yo-favs'));
+  const [localWatchlist, setLocalWatchlist] = useState(() => readGuestSet('yo-watch'));
 
   // AI search results (null = nothing searched yet)
   const [search, setSearch] = useState(null);
@@ -293,6 +309,7 @@ export default function App() {
           const next = new Set(prev);
           if (next.has(movie.id)) next.delete(movie.id);
           else next.add(movie.id);
+          writeGuestSet('yo-favs', next);
           return next;
         });
       }
@@ -319,6 +336,7 @@ export default function App() {
           const next = new Set(prev);
           if (next.has(movie.id)) next.delete(movie.id);
           else next.add(movie.id);
+          writeGuestSet('yo-watch', next);
           return next;
         });
       }
