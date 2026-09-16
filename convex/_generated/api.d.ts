@@ -15,6 +15,7 @@ import type * as favorites from "../favorites.js";
 import type * as preferences from "../preferences.js";
 import type * as recent from "../recent.js";
 import type * as watched from "../watched.js";
+import type * as watchlist from "../watchlist.js";
 
 import type {
   ApiFromModules,
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   preferences: typeof preferences;
   recent: typeof recent;
   watched: typeof watched;
+  watchlist: typeof watchlist;
 }>;
 
 /**

@@ -18,6 +18,7 @@ export const add = mutation({
     tmdbId: v.number(),
     title: v.string(),
     posterPath: v.optional(v.string()),
+    genreIds: v.optional(v.array(v.number())),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -28,12 +29,19 @@ export const add = mutation({
         q.eq("userId", identity.subject).eq("tmdbId", args.tmdbId)
       )
       .first();
-    if (existing) return existing._id;
+    if (existing) {
+      // Backfill genres on older rows missing them (taste profile fuel)
+      if (!existing.genre_ids && args.genreIds) {
+        await ctx.db.patch(existing._id, { genre_ids: args.genreIds });
+      }
+      return existing._id;
+    }
     return await ctx.db.insert("favorites", {
       userId: identity.subject,
       tmdbId: args.tmdbId,
       title: args.title,
       posterPath: args.posterPath,
+      genre_ids: args.genreIds,
       addedAt: Date.now(),
     });
   },

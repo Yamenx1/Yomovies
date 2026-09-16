@@ -19,6 +19,31 @@ import MoodPicker from './components/MoodPicker';
 import MovieGrid from './components/MovieGrid';
 import MovieDetails from './components/MovieDetails';
 import FavoritesDrawer from './components/FavoritesDrawer';
+import {
+  buildTasteProfile,
+  recommendFromProfile,
+  FAVORITE_WEIGHT,
+  WATCHLIST_WEIGHT,
+} from './services/recommend';
+
+// Guest taste memory: id → genres, so signed-out hearts/watchlists still
+// teach the "For you" profile across reloads
+const GUEST_META_KEY = 'yo-meta';
+function rememberGuestMeta(movie) {
+  if (!movie?.genre_ids?.length) return;
+  try {
+    const meta = JSON.parse(localStorage.getItem(GUEST_META_KEY) ?? '{}');
+    meta[movie.id] = { genres: movie.genre_ids };
+    localStorage.setItem(GUEST_META_KEY, JSON.stringify(meta));
+  } catch {}
+}
+function readGuestMeta() {
+  try {
+    return JSON.parse(localStorage.getItem(GUEST_META_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
 
 export default function App() {
   const { isAuthenticated } = useConvexAuth();
@@ -259,9 +284,11 @@ export default function App() {
             tmdbId: movie.id,
             title: movie.title,
             posterPath: movie.poster_path ?? undefined,
+            genreIds: movie.genre_ids ?? undefined,
           }).catch(() => {});
         }
       } else {
+        rememberGuestMeta(movie);
         setLocalFavorites((prev) => {
           const next = new Set(prev);
           if (next.has(movie.id)) next.delete(movie.id);
@@ -283,9 +310,11 @@ export default function App() {
             tmdbId: movie.id,
             title: movie.title,
             posterPath: movie.poster_path ?? undefined,
+            genreIds: movie.genre_ids ?? undefined,
           }).catch(() => {});
         }
       } else {
+        rememberGuestMeta(movie);
         setLocalWatchlist((prev) => {
           const next = new Set(prev);
           if (next.has(movie.id)) next.delete(movie.id);
@@ -326,6 +355,36 @@ export default function App() {
       : viewing.movies.filter((m) => localSet.has(m.id));
   const favoriteItems = toDrawerItems(favoritesList, localFavorites);
   const watchlistItems = toDrawerItems(watchlistList, localWatchlist);
+
+  // --- "For you" taste profile -------------------------------------------
+  // Hearts (+2) and watchlists (+1.5) vote for their genres; trending pool
+  // is cosine-scored against the profile. Guests learn from local meta.
+  const guestMeta = readGuestMeta();
+  const signals = [];
+  if (isAuthenticated) {
+    for (const f of favoritesList ?? []) {
+      signals.push({ genre_ids: f.genre_ids, weight: FAVORITE_WEIGHT });
+    }
+    for (const f of watchlistList ?? []) {
+      signals.push({ genre_ids: f.genre_ids, weight: WATCHLIST_WEIGHT });
+    }
+  } else {
+    const lookupGenres = (id) =>
+      guestMeta[id]?.genres ??
+      viewing.movies.find((m) => m.id === id)?.genre_ids;
+    for (const id of localFavorites) {
+      signals.push({ genre_ids: lookupGenres(id), weight: FAVORITE_WEIGHT });
+    }
+    for (const id of localWatchlist) {
+      signals.push({ genre_ids: lookupGenres(id), weight: WATCHLIST_WEIGHT });
+    }
+  }
+  const profile = buildTasteProfile(signals);
+  const knownIds = new Set([...favoriteIds, ...watchlistIds, ...excludedSet]);
+  const forYou =
+    profile.count >= 3 && trending.length > 0
+      ? recommendFromProfile(profile, trending, knownIds, 10)
+      : [];
 
   const showResults =
     viewing.loading || viewing.error || viewing.movies.length > 0;
@@ -586,6 +645,48 @@ export default function App() {
         onSelectMovie={setSelectedMovie}
         apiReady={apiReady}
       />
+
+      {/* For-you rail (learns from hearts + watchlist, guests included) */}
+      {!showResults && forYou.length >= 4 && (
+        <div style={{ maxWidth: 960, margin: '0 auto', padding: '34px 20px 0' }}>
+          <h3 style={{ fontSize: 14, color: t.text, margin: '0 0 4px' }}>
+            ✨ {str.forYouTitle}
+          </h3>
+          <p style={{ fontSize: 12.5, color: t.muted, margin: '0 0 12px' }}>
+            {str.forYouSub}
+          </p>
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              overflowX: 'auto',
+              paddingBottom: 10,
+              scrollSnapType: 'x mandatory',
+            }}
+          >
+            {forYou.map((m) => (
+              <img
+                key={m.id}
+                src={getImageUrl(m.poster_path, 'w185')}
+                alt={m.title}
+                title={m.title}
+                loading="lazy"
+                onClick={() => setSelectedMovie(m)}
+                style={{
+                  width: 110,
+                  aspectRatio: '2 / 3',
+                  objectFit: 'cover',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  scrollSnapAlign: 'start',
+                  border: `1px solid ${t.accent}66`,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Trending rail (landing only — doubles as instant details entry) */}
       {!showResults && trending.length > 0 && (

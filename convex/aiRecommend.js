@@ -67,18 +67,20 @@ export const recommend = action({
 
     const prompt =
       `Recommend movies for someone's current feeling. The person says: "${query}"\n\n` +
-      `Pick 12 REAL, well-known movies that fit — mix eras and styles, no repeats. ` +
+      `Name 20 REAL, well-known movies that fit, split into two different lists of 10: ` +
+      `"movies" (the 10 best fits) and "more_movies" (10 MORE, all different, mix eras and styles, no repeats). ` +
       `If they name an actor, director, or character owner (e.g. "DiCaprio", "Nolan films", "more like Dune"), ` +
       `put that person's name in "person" — otherwise null. ` +
       `${reasonLang} ` +
       `Output ONLY a JSON object and absolutely nothing else — no preamble, no markdown, no explanation: ` +
       `{"movies": [{"title": "<exact film title>", "year": <release year>}], ` +
+      `"more_movies": [{"title": "<exact film title>", "year": <release year>}], ` +
       `"person": "<name or null>", ` +
       `"reason": "<one short friendly line explaining the picks>"}`;
 
     const generationConfig = {
       responseMimeType: "application/json",
-      maxOutputTokens: 1000,
+      maxOutputTokens: 2000,
       temperature: 0.7,
       // Lite models reject thinkingConfig; full models need the cap so the
       // thinking trace doesn't eat the JSON budget
@@ -123,12 +125,15 @@ export const recommend = action({
       throw new Error("AI hiccup — try again or hit Surprise me");
     }
 
-    const picks = Array.isArray(parsed.movies) ? parsed.movies.slice(0, 12) : [];
+    const picks = [
+      ...(Array.isArray(parsed.movies) ? parsed.movies : []),
+      ...(Array.isArray(parsed.more_movies) ? parsed.more_movies : []),
+    ].slice(0, 20);
     const movies = [];
     const seenIds = new Set();
 
     const pushHit = (hit) => {
-      if (hit && !seenIds.has(hit.id) && movies.length < 12) {
+      if (hit && !seenIds.has(hit.id) && movies.length < 20) {
         seenIds.add(hit.id);
         movies.push({
           id: hit.id,
@@ -177,12 +182,70 @@ export const recommend = action({
     }
 
     for (const pick of picks) {
-      if (!pick?.title || movies.length >= 12) continue;
+      if (!pick?.title || movies.length >= 20) continue;
       try {
         const hit = await tmdbSearch(tmdbKey, pick.title, pick.year, tmdbLang);
         pushHit(hit);
       } catch {
         // Skip unresolvable titles — never fail the whole batch for one miss
+      }
+    }
+
+    // Second wave: single replies top out around ~12 titles, so explicitly
+    // ask for more excluding what we already have (best-effort top-up)
+    if (movies.length > 0 && movies.length < 18) {
+      const have = movies.map((m) => `"${m.title}"`).join(", ");
+      try {
+        const res2 = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text:
+                        `More movies like these, but all DIFFERENT — none of: ${have}. ` +
+                        `Feeling was: "${query}". ` +
+                        `${reasonLang} ` +
+                        `Output ONLY a JSON object and nothing else: ` +
+                        `{"movies": [{"title": "<exact film title>", "year": <release year>}], ` +
+                        `"more_movies": [], "person": null, "reason": ""}`,
+                    },
+                  ],
+                },
+              ],
+              generationConfig,
+            }),
+          }
+        );
+        if (res2.ok) {
+          const data2 = await res2.json();
+          const parts2 = data2.candidates?.[0]?.content?.parts ?? [];
+          const raw2 = parts2.map((p) => p.text ?? "").join("\n");
+          const t2 = raw2.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+          const s2 = t2.indexOf("{");
+          const e2 = t2.lastIndexOf("}");
+          if (s2 !== -1 && e2 !== -1) {
+            const parsed2 = JSON.parse(t2.slice(s2, e2 + 1));
+            const extra = [
+              ...(Array.isArray(parsed2.movies) ? parsed2.movies : []),
+              ...(Array.isArray(parsed2.more_movies) ? parsed2.more_movies : []),
+            ];
+            for (const pick of extra) {
+              if (!pick?.title || movies.length >= 20) break;
+              try {
+                pushHit(await tmdbSearch(tmdbKey, pick.title, pick.year, tmdbLang));
+              } catch {
+                // skip misses
+              }
+            }
+          }
+        }
+      } catch {
+        // First wave stands on its own
       }
     }
     if (movies.length === 0) {

@@ -22,12 +22,14 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_tmdb", ["userId", "tmdbId"]),
 
-  // Favorite titles (heart button on cards)
+  // Favorite titles (heart button on cards). genre_ids powers the
+  // "For you" taste profile.
   favorites: defineTable({
     userId: v.string(),
     tmdbId: v.number(),
     title: v.string(),
     posterPath: v.optional(v.string()),
+    genre_ids: v.optional(v.array(v.number())),
     addedAt: v.number(),
   })
     .index("by_user", ["userId"])
@@ -39,6 +41,7 @@ export default defineSchema({
     tmdbId: v.number(),
     title: v.string(),
     posterPath: v.optional(v.string()),
+    genre_ids: v.optional(v.array(v.number())),
     addedAt: v.number(),
   })
     .index("by_user", ["userId"])
