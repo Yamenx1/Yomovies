@@ -1,6 +1,7 @@
 import { ClerkProvider, useAuth } from '@clerk/react';
 import { ConvexProviderWithClerk } from 'convex/react-clerk';
 import { ConvexReactClient } from 'convex/react';
+import { BrowserRouter } from 'react-router-dom';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -21,18 +22,18 @@ function bootstrap() {
 
   const convex = new ConvexReactClient(CONVEX_URL);
 
-  // ClerkProvider wraps the entire app so every component
-  // can access Clerk auth; ConvexProviderWithClerk bridges
-  // Clerk session tokens into Convex (ctx.auth) calls.
-  // ErrorBoundary turns any startup/render crash into a readable message.
+  // BrowserRouter enables shareable URLs (/movie/:id, /profile) with
+  // working back-button support (see vercel.json SPA rewrite).
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
       <ErrorBoundary>
-        <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
-          <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-            <App />
-          </ConvexProviderWithClerk>
-        </ClerkProvider>
+        <BrowserRouter>
+          <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/">
+            <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+              <App />
+            </ConvexProviderWithClerk>
+          </ClerkProvider>
+        </BrowserRouter>
       </ErrorBoundary>
     </React.StrictMode>
   );
