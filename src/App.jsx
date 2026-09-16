@@ -1,68 +1,30 @@
 // ---------------------------------------------------------------------------
 // APP — Root component for Yo Movies (Clerk + Convex + TMDB + Gemini)
 // ---------------------------------------------------------------------------
-// - Search: Gemini names real films for ANY feeling, TMDB verifies each one
-// - Surprise: random trending picks, no input needed
-// - Theme / watched / favorites persist in Convex when signed in,
-//   local state when signed out
+// Composition only: user/guest/taste state lives in useUserData,
+// useGuestData and useTasteProfile. This file owns UI state (search,
+// surprise, filters, overlays, language) and wires everything together.
 // ---------------------------------------------------------------------------
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useQuery, useMutation, useConvexAuth } from 'convex/react';
-import { api } from '../convex/_generated/api';
+import { useConvexAuth } from 'convex/react';
 import THEMES from './config/theme';
 import { STRINGS } from './config/strings';
 import { isApiKeyConfigured, getTrending, getImageUrl, setTmdbLang } from './services/tmdb';
 import { useSurpriseMovies } from './hooks/useMovies';
+import { useUserData } from './hooks/useUserData';
+import { useGuestData } from './hooks/useGuestData';
+import { useTasteProfile } from './hooks/useTasteProfile';
 import Header from './components/Header';
 import MoodPicker from './components/MoodPicker';
 import MovieGrid from './components/MovieGrid';
 import MovieDetails from './components/MovieDetails';
 import FavoritesDrawer from './components/FavoritesDrawer';
-import {
-  buildTasteProfile,
-  recommendFromProfile,
-  FAVORITE_WEIGHT,
-  WATCHLIST_WEIGHT,
-} from './services/recommend';
-
-// Guest taste memory: id → genres, so signed-out hearts/watchlists still
-// teach the "For you" profile across reloads
-const GUEST_META_KEY = 'yo-meta';
-function rememberGuestMeta(movie) {
-  if (!movie?.genre_ids?.length) return;
-  try {
-    const meta = JSON.parse(localStorage.getItem(GUEST_META_KEY) ?? '{}');
-    meta[movie.id] = { genres: movie.genre_ids };
-    localStorage.setItem(GUEST_META_KEY, JSON.stringify(meta));
-  } catch {}
-}
-function readGuestMeta() {
-  try {
-    return JSON.parse(localStorage.getItem(GUEST_META_KEY) ?? '{}');
-  } catch {
-    return {};
-  }
-}
-
-// Guest id-sets (hearts/watchlist) persist per browser so the taste
-// profile survives reloads without an account
-function readGuestSet(key) {
-  try {
-    const raw = JSON.parse(localStorage.getItem(key) ?? '[]');
-    return new Set(Array.isArray(raw) ? raw.filter((n) => typeof n === 'number') : []);
-  } catch {
-    return new Set();
-  }
-}
-function writeGuestSet(key, set) {
-  try {
-    localStorage.setItem(key, JSON.stringify([...set]));
-  } catch {}
-}
 
 export default function App() {
   const { isAuthenticated } = useConvexAuth();
+  const user = useUserData();
+  const guest = useGuestData();
 
   // --- Language (persisted per browser, flips RTL + TMDB language) ---
   const [lang, setLang] = useState(() => {
@@ -84,26 +46,6 @@ export default function App() {
   const toggleLang = useCallback(() => {
     setLang((prev) => (prev === 'ar' ? 'en' : 'ar'));
   }, []);
-
-  // --- Convex state (null/[] while loading or signed out) ---
-  const prefs = useQuery(api.preferences.get);
-  const watchedList = useQuery(api.watched.list);
-  const favoritesList = useQuery(api.favorites.list);
-  const watchlistList = useQuery(api.watchlist.list);
-
-  const setPrefs = useMutation(api.preferences.set);
-  const addWatched = useMutation(api.watched.add);
-  const clearWatched = useMutation(api.watched.clear);
-  const addFavorite = useMutation(api.favorites.add);
-  const removeFavorite = useMutation(api.favorites.remove);
-  const addWatchlist = useMutation(api.watchlist.add);
-  const removeWatchlist = useMutation(api.watchlist.remove);
-
-  // --- Local fallback state (signed-out + instant UI) ---
-  const [localTheme, setLocalTheme] = useState('dark');
-  const [localExcluded, setLocalExcluded] = useState(() => new Set());
-  const [localFavorites, setLocalFavorites] = useState(() => readGuestSet('yo-favs'));
-  const [localWatchlist, setLocalWatchlist] = useState(() => readGuestSet('yo-watch'));
 
   // AI search results (null = nothing searched yet)
   const [search, setSearch] = useState(null);
@@ -160,37 +102,19 @@ export default function App() {
     el.style.setProperty('--my', `${e.clientY - r.top}px`);
   }, []);
 
+  // --- Unified data source: Convex when signed in, local when not ---
   const themeName =
-    isAuthenticated && prefs?.theme ? prefs.theme : localTheme;
-
-  const excludedSet =
-    isAuthenticated && watchedList
-      ? new Set(watchedList.map((w) => w.tmdbId))
-      : localExcluded;
-
-  const favoriteIds =
-    isAuthenticated && favoritesList
-      ? new Set(favoritesList.map((f) => f.tmdbId))
-      : localFavorites;
-
-  const watchlistIds =
-    isAuthenticated && watchlistList
-      ? new Set(watchlistList.map((f) => f.tmdbId))
-      : localWatchlist;
+    isAuthenticated && user.themeName ? user.themeName : guest.localTheme;
+  const excludedSet = isAuthenticated ? user.excludedIds : guest.localExcluded;
+  const favoriteIds = isAuthenticated ? user.favoriteIds : guest.localFavorites;
+  const watchlistIds = isAuthenticated ? user.watchlistIds : guest.localWatchlist;
 
   const t = THEMES[themeName] ?? THEMES.dark;
 
   // What the grid shows: surprise hand wins, otherwise the latest search
   const isSurprise = surpriseSeed != null;
-  const viewing = isSurprise
-    ? {
-        movies: surprise.movies,
-        loading: surprise.loading,
-        error: surprise.error,
-        heading: str.surpriseHeading,
-        badge: str.badgeLive,
-      }
-    : search == null
+  const searchView =
+    search == null
       ? { movies: [], loading: false, error: null, heading: null, badge: null }
       : {
           movies: search.movies,
@@ -199,6 +123,15 @@ export default function App() {
           heading: search.reason,
           badge: str.badgeAi,
         };
+  const viewing = isSurprise
+    ? {
+        movies: surprise.movies,
+        loading: surprise.loading,
+        error: surprise.error,
+        heading: str.surpriseHeading,
+        badge: str.badgeLive,
+      }
+    : searchView;
 
   // Filter out watched/excluded movies + apply rating/era/family filters
   const yearOf = (m) => (m.release_date ? new Date(m.release_date).getFullYear() : null);
@@ -218,15 +151,35 @@ export default function App() {
     )
     .filter((m) => !excludedSet.has(m.id));
 
+  // --- "For you" learner (hearts + watchlist + ratings, guests included) ---
+  const { forYou } = useTasteProfile({
+    isAuthenticated,
+    favoritesList: user.favoritesList,
+    watchlistList: user.watchlistList,
+    localFavorites: guest.localFavorites,
+    localWatchlist: guest.localWatchlist,
+    guestMeta: guest.readGuestMeta(),
+    viewingMovies: viewing.movies,
+    trending,
+    excludedIds: new Set([...favoriteIds, ...watchlistIds, ...excludedSet]),
+  });
+
+  const favoriteItems = isAuthenticated
+    ? user.favoriteItems
+    : guest.toDrawerItems(viewing.movies, guest.localFavorites);
+  const watchlistItems = isAuthenticated
+    ? user.watchlistItems
+    : guest.toDrawerItems(viewing.movies, guest.localWatchlist);
+
   // --- Callbacks ---
   const toggleTheme = useCallback(() => {
     const next =
-      (isAuthenticated && prefs?.theme ? prefs.theme : localTheme) === 'dark'
+      (isAuthenticated && user.themeName ? user.themeName : guest.localTheme) === 'dark'
         ? 'light'
         : 'dark';
-    setLocalTheme(next);
-    if (isAuthenticated) setPrefs({ theme: next }).catch(() => {});
-  }, [isAuthenticated, prefs, localTheme, setPrefs]);
+    guest.setLocalTheme(next);
+    if (isAuthenticated) user.mutations.setPrefs({ theme: next }).catch(() => {});
+  }, [isAuthenticated, user, guest]);
 
   // AI search completed in MoodPicker — show its movies
   const handleResults = useCallback((results) => {
@@ -273,84 +226,74 @@ export default function App() {
       const tmdbId = typeof movie === 'object' ? movie.id : movie;
       const title = typeof movie === 'object' ? movie.title : undefined;
       if (isAuthenticated) {
-        addWatched({ tmdbId, title }).catch(() => {});
+        user.mutations.addWatched({ tmdbId, title }).catch(() => {});
       } else {
-        setLocalExcluded((prev) => {
+        guest.setLocalExcluded((prev) => {
           const next = new Set(prev);
           next.add(tmdbId);
           return next;
         });
       }
     },
-    [isAuthenticated, addWatched]
+    [isAuthenticated, user, guest]
   );
 
   const handleClearExcluded = useCallback(() => {
-    setLocalExcluded(new Set());
-    if (isAuthenticated) clearWatched().catch(() => {});
-  }, [isAuthenticated, clearWatched]);
+    guest.clearExcluded();
+    if (isAuthenticated) user.mutations.clearWatched().catch(() => {});
+  }, [isAuthenticated, user, guest]);
 
   const handleToggleFavorite = useCallback(
     (movie) => {
       if (isAuthenticated) {
         if (favoriteIds.has(movie.id)) {
-          removeFavorite({ tmdbId: movie.id }).catch(() => {});
+          user.mutations.removeFavorite({ tmdbId: movie.id }).catch(() => {});
         } else {
-          addFavorite({
-            tmdbId: movie.id,
-            title: movie.title,
-            posterPath: movie.poster_path ?? undefined,
-            genreIds: movie.genre_ids ?? undefined,
-          }).catch(() => {});
+          user.mutations
+            .addFavorite({
+              tmdbId: movie.id,
+              title: movie.title,
+              posterPath: movie.poster_path ?? undefined,
+              genreIds: movie.genre_ids ?? undefined,
+            })
+            .catch(() => {});
         }
       } else {
-        rememberGuestMeta(movie);
-        setLocalFavorites((prev) => {
-          const next = new Set(prev);
-          if (next.has(movie.id)) next.delete(movie.id);
-          else next.add(movie.id);
-          writeGuestSet('yo-favs', next);
-          return next;
-        });
+        guest.toggleFavorite(movie);
       }
     },
-    [isAuthenticated, favoriteIds, addFavorite, removeFavorite]
+    [isAuthenticated, favoriteIds, user, guest]
   );
 
   const handleToggleWatchlist = useCallback(
     (movie) => {
       if (isAuthenticated) {
         if (watchlistIds.has(movie.id)) {
-          removeWatchlist({ tmdbId: movie.id }).catch(() => {});
+          user.mutations.removeWatchlist({ tmdbId: movie.id }).catch(() => {});
         } else {
-          addWatchlist({
-            tmdbId: movie.id,
-            title: movie.title,
-            posterPath: movie.poster_path ?? undefined,
-            genreIds: movie.genre_ids ?? undefined,
-          }).catch(() => {});
+          user.mutations
+            .addWatchlist({
+              tmdbId: movie.id,
+              title: movie.title,
+              posterPath: movie.poster_path ?? undefined,
+              genreIds: movie.genre_ids ?? undefined,
+            })
+            .catch(() => {});
         }
       } else {
-        rememberGuestMeta(movie);
-        setLocalWatchlist((prev) => {
-          const next = new Set(prev);
-          if (next.has(movie.id)) next.delete(movie.id);
-          else next.add(movie.id);
-          writeGuestSet('yo-watch', next);
-          return next;
-        });
+        guest.toggleWatchlist(movie);
       }
     },
-    [isAuthenticated, watchlistIds, addWatchlist, removeWatchlist]
+    [isAuthenticated, watchlistIds, user, guest]
   );
 
   // Check if API key is configured
   const apiReady = isApiKeyConfigured();
 
   const favoritesForRow =
-    isAuthenticated && favoritesList
-      ? favoritesList
-      : viewing.movies.filter((m) => localFavorites.has(m.id));
+    isAuthenticated && user.favoritesList
+      ? user.favoritesList
+      : viewing.movies.filter((m) => guest.localFavorites.has(m.id));
 
   // Ambient backdrop: blurred backdrops of the movies on screen, so the
   // whole page mirrors the current picks. Low-res is plenty when blurred.
@@ -358,51 +301,6 @@ export default function App() {
     .filter((m) => m.backdrop_path)
     .slice(0, 3);
   const ambientKey = ambient.map((m) => m.id).join(',');
-
-  // Drawer items need poster/title — Convex rows carry them, signed-out
-  // rows resolve against the movies currently on screen
-  const toDrawerItems = (rows, localSet) =>
-    isAuthenticated && rows
-      ? rows.map((f) => ({
-          id: f.tmdbId,
-          title: f.title,
-          poster_path: f.posterPath ?? null,
-          release_date: null,
-          vote_average: null,
-        }))
-      : viewing.movies.filter((m) => localSet.has(m.id));
-  const favoriteItems = toDrawerItems(favoritesList, localFavorites);
-  const watchlistItems = toDrawerItems(watchlistList, localWatchlist);
-
-  // --- "For you" taste profile -------------------------------------------
-  // Hearts (+2) and watchlists (+1.5) vote for their genres; trending pool
-  // is cosine-scored against the profile. Guests learn from local meta.
-  const guestMeta = readGuestMeta();
-  const signals = [];
-  if (isAuthenticated) {
-    for (const f of favoritesList ?? []) {
-      signals.push({ genre_ids: f.genre_ids, weight: FAVORITE_WEIGHT });
-    }
-    for (const f of watchlistList ?? []) {
-      signals.push({ genre_ids: f.genre_ids, weight: WATCHLIST_WEIGHT });
-    }
-  } else {
-    const lookupGenres = (id) =>
-      guestMeta[id]?.genres ??
-      viewing.movies.find((m) => m.id === id)?.genre_ids;
-    for (const id of localFavorites) {
-      signals.push({ genre_ids: lookupGenres(id), weight: FAVORITE_WEIGHT });
-    }
-    for (const id of localWatchlist) {
-      signals.push({ genre_ids: lookupGenres(id), weight: WATCHLIST_WEIGHT });
-    }
-  }
-  const profile = buildTasteProfile(signals);
-  const knownIds = new Set([...favoriteIds, ...watchlistIds, ...excludedSet]);
-  const forYou =
-    profile.count >= 3 && trending.length > 0
-      ? recommendFromProfile(profile, trending, knownIds, 10)
-      : [];
 
   const showResults =
     viewing.loading || viewing.error || viewing.movies.length > 0;
@@ -605,6 +503,16 @@ export default function App() {
           .search-row input { flex: 1 1 100%; }
           .search-row button[type="submit"] { flex: 1; padding: 12px 20px; }
         }
+        .card {
+          animation: rise 0.35s ease both;
+          position: relative;
+          overflow: hidden;
+        }
+        .card:hover { border-color: ${t.accent}44; }
+        @keyframes rise {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @keyframes driftA {
           from { transform: translate(0, 0) scale(1); }
           to { transform: translate(9vmax, 7vmax) scale(1.15); }
@@ -620,16 +528,6 @@ export default function App() {
         @keyframes collagePan {
           from { transform: rotate(-8deg) scale(1.15) translate(0, 0); }
           to { transform: rotate(-8deg) scale(1.15) translate(-2%, 2%); }
-        }
-        .card {
-          animation: rise 0.35s ease both;
-          position: relative;
-          overflow: hidden;
-        }
-        .card:hover { border-color: ${t.accent}44; }
-        @keyframes rise {
-          from { opacity: 0; transform: translateY(12px); }
-          to { opacity: 1; transform: translateY(0); }
         }
         @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
         @media (prefers-reduced-motion: reduce) { .aurora-a, .aurora-b { animation: none; } }
@@ -871,23 +769,23 @@ export default function App() {
             )}
           </div>
           <MovieGrid
-          t={t}
-          str={str}
-          movies={filteredMovies}
-          loading={viewing.loading}
-          error={viewing.error}
-          heading={viewing.heading}
-          badge={viewing.badge}
-          excludedCount={excludedSet.size}
-          onExclude={handleExclude}
-          onClearExcluded={handleClearExcluded}
-          apiReady={apiReady}
-          favoriteIds={favoriteIds}
-          onToggleFavorite={handleToggleFavorite}
-          watchlistIds={watchlistIds}
-          onToggleWatchlist={handleToggleWatchlist}
-          onSelect={setSelectedMovie}
-        />
+            t={t}
+            str={str}
+            movies={filteredMovies}
+            loading={viewing.loading}
+            error={viewing.error}
+            heading={viewing.heading}
+            badge={viewing.badge}
+            excludedCount={excludedSet.size}
+            onExclude={handleExclude}
+            onClearExcluded={handleClearExcluded}
+            apiReady={apiReady}
+            favoriteIds={favoriteIds}
+            onToggleFavorite={handleToggleFavorite}
+            watchlistIds={watchlistIds}
+            onToggleWatchlist={handleToggleWatchlist}
+            onSelect={setSelectedMovie}
+          />
         </>
       )}
 
