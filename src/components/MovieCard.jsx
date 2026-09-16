@@ -45,14 +45,20 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
       onClick={() => onSelect?.(movie)}
       title={`View details for ${movie.title}`}
       style={{
-        // Glass frame: translucent, blurs the ambient backdrop behind it,
-        // soft top highlight + deep shadow so it floats in the scene
-        background: `${t.surface}A6`,
-        backdropFilter: 'blur(18px) saturate(150%)',
-        WebkitBackdropFilter: 'blur(18px) saturate(150%)',
-        border: `1px solid ${t.border}80`,
-        boxShadow:
-          '0 12px 40px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.10)',
+        // True glass: mostly-transparent body so the ambient backdrop pours
+        // through, heavy blur + sheen + bright rim, text kept readable
+        // with a soft shadow
+        background: t.dark
+          ? 'linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.03) 45%), rgba(31,37,52,0.38)'
+          : 'linear-gradient(135deg, rgba(255,255,255,0.55), rgba(255,255,255,0.18) 45%), rgba(255,255,255,0.42)',
+        backdropFilter: 'blur(26px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(26px) saturate(180%)',
+        border: t.dark
+          ? '1px solid rgba(255,255,255,0.18)'
+          : '1px solid rgba(21,26,36,0.14)',
+        boxShadow: t.dark
+          ? '0 16px 48px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.25)'
+          : '0 16px 48px rgba(21,26,36,0.18), inset 0 1px 0 rgba(255,255,255,0.7)',
         borderRadius: 12,
         animationDelay: `${index * 50}ms`,
         display: 'flex',
@@ -95,7 +101,15 @@ export default function MovieCard({ movie, t, index, onExclude, isFavorite, onTo
       )}
 
       {/* Info section */}
-      <div style={{ padding: '16px 16px 18px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div
+        style={{
+          padding: '16px 16px 18px',
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          textShadow: t.dark ? '0 1px 10px rgba(0,0,0,0.55)' : 'none',
+        }}
+      >
         {/* Title */}
         <div
           style={{

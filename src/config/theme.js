@@ -8,6 +8,7 @@ import logoLight from '../../yo-movies-logo-uploaded-light.png';
 
 const THEMES = {
   dark: {
+    dark: true,
     bg: '#151A24',
     surface: '#1F2534',
     border: '#2C3244',
@@ -17,6 +18,7 @@ const THEMES = {
     logo: logoDark,
   },
   light: {
+    dark: false,
     bg: '#F5F3EE',
     surface: '#FFFFFF',
     border: '#DDD8CC',
