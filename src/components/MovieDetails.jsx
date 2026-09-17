@@ -8,6 +8,7 @@ import {
   getSimilarMovies,
   getWatchProviders,
   pickProviders,
+  providerLink,
   getImageUrl,
   pickTrailerKey,
 } from '../services/tmdb';
@@ -431,6 +432,9 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
               </h3>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {providers.map((p) => {
+                  // Real service link when the provider has a stable public
+                  // search URL, otherwise the TMDB watch page for this title
+                  const href = providerLink(p.provider_name, title, watchLink);
                   const badge = (
                     <>
                       {p.logo_path && (
@@ -455,13 +459,13 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
                     color: t.text,
                     textDecoration: 'none',
                   };
-                  return watchLink ? (
+                  return href ? (
                     <a
                       key={p.provider_id}
-                      href={watchLink}
+                      href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      title={`${p.provider_name} — open watch options`}
+                      title={`${p.provider_name} — open ${title} there`}
                       style={chipStyle}
                     >
                       {badge}

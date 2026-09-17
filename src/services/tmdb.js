@@ -169,11 +169,25 @@ export async function getWatchProviders(movieId, kind = 'movie') {
 }
 
 /**
- * Pick the provider entry for the viewer's region (Saudi default,
- * with sane fallbacks). Returns { providers, region, link } — providers
- * have { provider_id, provider_name, logo_path }; link is TMDB's watch
- * page for this title+region (provider deep links aren't exposed by TMDB).
+ * Direct service links. TMDB exposes no per-title provider deep links, so
+ * for services with a stable public search URL we link straight into
+ * their own search for the title; everything else falls back to TMDB.
  */
+const PROVIDER_SEARCH = [
+  { match: ['netflix'], url: (t) => `https://www.netflix.com/search?q=${encodeURIComponent(t)}` },
+  { match: ['prime video', 'amazon'], url: (t) => `https://www.primevideo.com/search?phrase=${encodeURIComponent(t)}` },
+  { match: ['disney'], url: (t) => `https://www.disneyplus.com/search?q=${encodeURIComponent(t)}` },
+  { match: ['apple tv', 'itunes'], url: (t) => `https://tv.apple.com/search?term=${encodeURIComponent(t)}` },
+  { match: ['youtube'], url: (t) => `https://www.youtube.com/results?search_query=${encodeURIComponent(t + ' full movie')}` },
+  { match: ['google play'], url: (t) => `https://play.google.com/store/search?q=${encodeURIComponent(t)}&c=movies` },
+  { match: ['hulu'], url: (t) => `https://www.hulu.com/search?q=${encodeURIComponent(t)}` },
+];
+
+export function providerLink(providerName, title, fallback) {
+  const name = (providerName ?? '').toLowerCase();
+  const rule = PROVIDER_SEARCH.find((r) => r.match.some((m) => name.includes(m)));
+  return rule ? rule.url(title) : (fallback ?? null);
+}
 export function pickProviders(watchData, region = 'SA') {
   const results = watchData?.results ?? {};
   const entry =
