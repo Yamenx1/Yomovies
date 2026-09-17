@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { useState, useEffect } from 'react';
-import { getTrending } from '../services/tmdb';
+import { getTrending, normalizeMedia } from '../services/tmdb';
 
 function mulberry32(a) {
   return function () {
@@ -51,7 +51,7 @@ export function useSurpriseMovies(seed, kind = 'movie') {
         setState({
           movies: shuffleSeeded(withPosters, seed)
             .slice(0, 24)
-            .map((m) => ({ ...m, kind })),
+            .map((m) => normalizeMedia(m, kind)),
           loading: false,
           error: null,
         });

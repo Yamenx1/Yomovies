@@ -11,7 +11,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useConvexAuth, useAction } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import THEMES from '../config/theme';
-import { isApiKeyConfigured, getTrending, getImageUrl, fetchGenreMap } from '../services/tmdb';
+import { isApiKeyConfigured, getTrending, getImageUrl, fetchGenreMap, normalizeMedia, setTmdbCaller } from '../services/tmdb';
 import { useSurpriseMovies } from '../hooks/useMovies';
 import { useUserData } from '../hooks/useUserData';
 import { useGuestData } from '../hooks/useGuestData';
@@ -35,6 +35,13 @@ export default function Home() {
 
   // --- Language (persisted per browser, flips RTL + TMDB language) ---
   const { lang, str, toggleLang } = useLang();
+
+  // Inject the server-side TMDB caller once: all tmdb.js reads then run
+  // through Convex, so the API key never ships in the browser bundle
+  const callTmdb = useAction(api.tmdb.call);
+  useEffect(() => {
+    setTmdbCaller(callTmdb);
+  }, [callTmdb]);
 
   // --- Content kind: movies or TV shows (persisted, drives AI + feeds) ---
   const [kind, setKindState] = useState(() => {
@@ -127,7 +134,7 @@ export default function Home() {
         if (cancelled) return;
         const seen = new Map();
         for (const m of [...(a.results ?? []), ...(b.results ?? [])]) {
-          if (m.poster_path && !seen.has(m.id)) seen.set(m.id, { ...m, kind });
+          if (m.poster_path && !seen.has(m.id)) seen.set(m.id, normalizeMedia(m, kind));
         }
         setTrending([...seen.values()].slice(0, 18));
       })

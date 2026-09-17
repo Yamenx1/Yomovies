@@ -22,8 +22,13 @@ export function setTmdbLang(lang) {
   LANG = lang;
 }
 
-// Your API key — loaded from .env file
-const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
+// The TMDB key lives ONLY in Convex (see convex/tmdb.js). Browsers call
+// the proxy action, so the key never ships in the JS bundle. App injects
+// the caller once at startup via setTmdbCaller.
+let caller = null;
+export function setTmdbCaller(fn) {
+  caller = fn;
+}
 
 // Simple in-memory cache: URL → response data
 // This prevents making the same API call twice in one session
@@ -57,9 +62,8 @@ function writeSessionCache(key, data) {
  * @returns {Promise<object>} - Parsed JSON response
  */
 async function fetchFromTMDB(endpoint, params = {}) {
-  // Build the full URL with API key and parameters
+  // Build the cache key (no secrets in it — key stays server-side)
   const url = new URL(`${BASE_URL}${endpoint}`);
-  url.searchParams.set('api_key', API_KEY);
   url.searchParams.set('language', LANG);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== '') {
@@ -79,14 +83,12 @@ async function fetchFromTMDB(endpoint, params = {}) {
     return sessionHit;
   }
 
-  // Make the actual API call
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`TMDB API error: ${response.status} ${response.statusText}`);
+  // Server-side call through the Convex proxy (key never leaves Convex)
+  if (!caller) {
+    throw new Error('Movie service is still starting — reload the app');
   }
-
-  const data = await response.json();
-  cache.set(cacheKey, data); // Cache for future use
+  const data = await caller({ endpoint, params: { ...params, language: LANG } });
+  cache.set(cacheKey, data);
   writeSessionCache(cacheKey, data);
   return data;
 }
@@ -288,9 +290,24 @@ export async function searchMovies(query, kind = 'movie') {
 }
 
 /**
- * Check if the API key is configured.
- * Returns false if the key is missing or still the placeholder.
+ * Normalize a TMDB movie OR tv object to the app's card shape.
+ * TV results use `name` / `first_air_date` — this maps them onto the
+ * `title` / `release_date` fields every component reads.
+ */
+export function normalizeMedia(m, kind = 'movie') {
+  if (!m) return m;
+  return {
+    ...m,
+    kind,
+    title: m.title ?? m.name ?? 'Untitled',
+    release_date: m.release_date ?? m.first_air_date ?? null,
+  };
+}
+
+/**
+ * The key lives server-side now, so the client is always "configured".
+ * Kept for its callers (the .env warning UI stays dormant).
  */
 export function isApiKeyConfigured() {
-  return API_KEY && API_KEY !== 'YOUR_API_KEY_HERE' && API_KEY.length > 10;
+  return true;
 }

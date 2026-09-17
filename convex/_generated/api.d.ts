@@ -15,6 +15,7 @@ import type * as favorites from "../favorites.js";
 import type * as preferences from "../preferences.js";
 import type * as ratings from "../ratings.js";
 import type * as recent from "../recent.js";
+import type * as tmdb from "../tmdb.js";
 import type * as watchLinks from "../watchLinks.js";
 import type * as watched from "../watched.js";
 import type * as watchlist from "../watchlist.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   preferences: typeof preferences;
   ratings: typeof ratings;
   recent: typeof recent;
+  tmdb: typeof tmdb;
   watchLinks: typeof watchLinks;
   watched: typeof watched;
   watchlist: typeof watchlist;

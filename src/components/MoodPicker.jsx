@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Shuffle, Share2, Check, History } from 'lucide-react';
 import { useAction, useQuery, useMutation, useConvexAuth } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { searchMovies, getImageUrl } from '../services/tmdb';
+import { searchMovies, getImageUrl, normalizeMedia } from '../services/tmdb';
 
 const LOCAL_RECENT_KEY = 'yo-recent-searches';
 const MAX_LOCAL_RECENT = 8;
@@ -204,7 +204,7 @@ export default function MoodPicker({
           const top = (data.results ?? [])
             .filter((m) => m.poster_path)
             .slice(0, 6)
-            .map((m) => ({ ...m, kind }));
+            .map((m) => normalizeMedia(m, kind));
           setSuggest(top);
           setSugOpen(top.length > 0);
         })
