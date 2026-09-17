@@ -29,6 +29,26 @@ const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 // This prevents making the same API call twice in one session
 const cache = new Map();
 
+// sessionStorage tier (10-min TTL) so repeat visits don't re-hit TMDB.
+// Everything is wrapped in try/catch — private mode etc. must never break us.
+const CACHE_TTL = 10 * 60 * 1000;
+function readSessionCache(key) {
+  try {
+    const raw = sessionStorage.getItem(`tmdb:${key}`);
+    if (!raw) return null;
+    const { t, data } = JSON.parse(raw);
+    if (!t || Date.now() - t > CACHE_TTL) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+function writeSessionCache(key, data) {
+  try {
+    sessionStorage.setItem(`tmdb:${key}`, JSON.stringify({ t: Date.now(), data }));
+  } catch {}
+}
+
 /**
  * Core fetch helper — all TMDB calls go through here.
  *
@@ -53,6 +73,11 @@ async function fetchFromTMDB(endpoint, params = {}) {
   if (cache.has(cacheKey)) {
     return cache.get(cacheKey);
   }
+  const sessionHit = readSessionCache(cacheKey);
+  if (sessionHit) {
+    cache.set(cacheKey, sessionHit);
+    return sessionHit;
+  }
 
   // Make the actual API call
   const response = await fetch(url);
@@ -62,7 +87,31 @@ async function fetchFromTMDB(endpoint, params = {}) {
 
   const data = await response.json();
   cache.set(cacheKey, data); // Cache for future use
+  writeSessionCache(cacheKey, data);
   return data;
+}
+
+/**
+ * Localized genre id → name map (TMDB translates these).
+ * Cached per language; falls back to null on any failure.
+ */
+const genreMapCache = {};
+export async function fetchGenreMap(lang = 'en-US') {
+  if (genreMapCache[lang]) return genreMapCache[lang];
+  try {
+    const [movie, tv] = await Promise.all([
+      fetchFromTMDB('/genre/movie/list', { language: lang }),
+      fetchFromTMDB('/genre/tv/list', { language: lang }),
+    ]);
+    const map = {};
+    for (const g of [...(movie.genres ?? []), ...(tv.genres ?? [])]) {
+      map[g.id] = g.name;
+    }
+    genreMapCache[lang] = map;
+    return map;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

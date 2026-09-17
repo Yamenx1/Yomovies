@@ -30,6 +30,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
   const [providers, setProviders] = useState([]);
   const [watchLink, setWatchLink] = useState(null);
   const [jwLinks, setJwLinks] = useState([]);
+  const [sharedTick, setSharedTick] = useState(false);
   const [showTrailer, setShowTrailer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -565,6 +566,40 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
             }}
           >
             {str.backToPicks}
+          </button>
+          <button
+            onClick={async () => {
+              const url = window.location.href;
+              const data = { title, text: title, url };
+              try {
+                if (navigator.share) {
+                  await navigator.share(data);
+                  return;
+                }
+                throw new Error('no-share');
+              } catch {
+                try {
+                  await navigator.clipboard.writeText(url);
+                  setSharedTick(true);
+                  setTimeout(() => setSharedTick(false), 2000);
+                } catch {}
+              }
+            }}
+            style={{
+              marginTop: 24,
+              marginLeft: 10,
+              background: 'none',
+              border: `1px solid ${t.border}`,
+              borderRadius: 8,
+              padding: '10px 22px',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+              color: t.text,
+              fontFamily: 'inherit',
+            }}
+          >
+            {sharedTick ? str.copied : str.shareTitle}
           </button>
           {onToggleWatchlist && (
             <button

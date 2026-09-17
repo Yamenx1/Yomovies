@@ -30,6 +30,16 @@ function writeLocalRecent(text) {
 // Example searches — tap to fill the box and run it. They teach by doing:
 // each one shows the kind of everyday language the AI understands.
 
+// One-tap emoji moods: zero typing, straight to a search.
+const EMOJI_MOODS = [
+  { emoji: '😂', query: 'laugh-out-loud comedies to cheer me up' },
+  { emoji: '😭', query: 'I need a good cry' },
+  { emoji: '🎃', query: 'spooky horror for a dark night' },
+  { emoji: '🚀', query: 'epic sci-fi adventures in space' },
+  { emoji: '😱', query: 'tense thrillers that keep me on edge' },
+  { emoji: '🥰', query: 'sweet romantic movies' },
+];
+
 /**
  * MoodPicker — Search-first hero section:
  * 1. Headline
@@ -140,7 +150,7 @@ export default function MoodPicker({
       setLastQuery(query);
       syncUrl(query, k);
       rememberSearch(query);
-      onResults({ movies: result.movies ?? [], reason: result.reason ?? null });
+      onResults({ movies: result.movies ?? [], reason: result.reason ?? null, query, kind: k });
     } catch (err) {
       const message = err?.data?.message ?? err?.message ?? str.searchHiccup;
       setError(message);
@@ -408,6 +418,43 @@ export default function MoodPicker({
           {error}
         </p>
       )}
+
+      {/* Emoji mood chips — one tap, zero typing */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 8,
+          justifyContent: 'center',
+          flexWrap: 'wrap',
+          marginBottom: 12,
+        }}
+      >
+        {EMOJI_MOODS.map((m) => (
+          <button
+            key={m.emoji}
+            onClick={() => {
+              setFreeText(m.query);
+              runSearch(m.query);
+            }}
+            title={m.query}
+            aria-label={`Search: ${m.query}`}
+            style={{
+              background: `${t.surface}B3`,
+              border: `1px solid ${t.border}`,
+              borderRadius: 999,
+              width: 44,
+              height: 44,
+              fontSize: 22,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {m.emoji}
+          </button>
+        ))}
+      </div>
 
       {/* Example searches */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 8 }}>

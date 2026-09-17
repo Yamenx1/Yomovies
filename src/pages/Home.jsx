@@ -8,9 +8,10 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useConvexAuth } from 'convex/react';
+import { useConvexAuth, useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import THEMES from '../config/theme';
-import { isApiKeyConfigured, getTrending, getImageUrl } from '../services/tmdb';
+import { isApiKeyConfigured, getTrending, getImageUrl, fetchGenreMap } from '../services/tmdb';
 import { useSurpriseMovies } from '../hooks/useMovies';
 import { useUserData } from '../hooks/useUserData';
 import { useGuestData } from '../hooks/useGuestData';
@@ -50,8 +51,24 @@ export default function Home() {
     } catch {}
   }, []);
 
-  // AI search results (null = nothing searched yet)
+  // AI search results (null = nothing searched yet; query+kind kept so
+  // "load more" can top up the same search)
   const [search, setSearch] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const recommendMore = useAction(api.aiRecommend.recommend);
+
+  // Localized genre names (Arabic tags when lang === 'ar')
+  const [genreMap, setGenreMap] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchGenreMap(lang === 'ar' ? 'ar-SA' : 'en-US').then((m) => {
+      if (!cancelled) setGenreMap(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lang]);
 
   // Random picks surprise (null = off). A fresh seed redeals the hand.
   const [surpriseSeed, setSurpriseSeed] = useState(null);
@@ -257,10 +274,37 @@ export default function Home() {
   // AI search completed in MoodPicker — show its movies
   const handleResults = useCallback((results) => {
     setSearch({ ...results, loading: false, error: null });
+    setHasMore(true);
     closeMovie(); // close any open details
     setSurpriseSeed(null); // leave surprise mode
     resetFilters();
   }, [resetFilters, closeMovie]);
+
+  // Infinite scroll / Load more: top up the SAME search, excluding shown
+  const loadMore = useCallback(async () => {
+    if (isSurprise || !search?.query || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const res = await recommendMore({
+        text: search.query,
+        lang,
+        kind: search.kind ?? 'movie',
+        excludeTitles: search.movies.map((m) => m.title),
+      });
+      const fresh = (res.movies ?? []).filter(
+        (m) => !search.movies.some((s) => s.id === m.id)
+      );
+      if (fresh.length === 0) {
+        setHasMore(false);
+        return;
+      }
+      setSearch((prev) => ({ ...prev, movies: [...prev.movies, ...fresh] }));
+    } catch {
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [isSurprise, search, loadingMore, hasMore, recommendMore, lang]);
 
   const handleSearchLoading = useCallback((loading) => {
     setSearch((prev) => ({ ...(prev ?? { movies: [] }), loading, error: null }));
@@ -848,6 +892,7 @@ export default function Home() {
           <MovieGrid
             t={t}
             str={str}
+            genreMap={genreMap}
             movies={filteredMovies}
             loading={viewing.loading}
             error={viewing.error}
@@ -859,10 +904,13 @@ export default function Home() {
             apiReady={apiReady}
             favoriteIds={favoriteIds}
             onToggleFavorite={handleToggleFavorite}
-            watchlistIds={watchlistIds}
-            onToggleWatchlist={handleToggleWatchlist}
-            onSelect={openMovie}
-          />
+          watchlistIds={watchlistIds}
+          onToggleWatchlist={handleToggleWatchlist}
+          onSelect={openMovie}
+          onLoadMore={isSurprise ? undefined : loadMore}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+        />
         </>
       )}
 

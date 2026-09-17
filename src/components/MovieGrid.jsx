@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Sparkles, RotateCcw } from 'lucide-react';
 import MovieCard from './MovieCard';
 import LoadingSpinner from './LoadingSpinner';
@@ -14,6 +15,7 @@ import LoadingSpinner from './LoadingSpinner';
 export default function MovieGrid({
   t,
   str,
+  genreMap,
   movies,
   loading,
   error,
@@ -28,7 +30,25 @@ export default function MovieGrid({
   watchlistIds,
   onToggleWatchlist,
   onSelect,
+  onLoadMore,
+  hasMore,
+  loadingMore,
 }) {
+  // Infinite scroll: when the sentinel scrolls into view, top up results
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    if (!hasMore || !onLoadMore) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) onLoadMore();
+      },
+      { rootMargin: '600px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, onLoadMore, movies.length]);
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px 80px' }}>
       {/* Heading + badge + reset button */}
@@ -120,6 +140,7 @@ export default function MovieGrid({
               movie={movie}
               t={t}
               str={str}
+              genreMap={genreMap}
               index={i}
               onExclude={onExclude}
               isFavorite={favoriteIds?.has(movie.id)}
@@ -130,6 +151,35 @@ export default function MovieGrid({
             />
           ))}
         </div>
+      )}
+
+      {/* Infinite scroll sentinel + explicit Load more */}
+      {!loading && !error && movies.length > 0 && onLoadMore && (
+        <>
+          <div ref={sentinelRef} style={{ height: 1 }} />
+          <div style={{ textAlign: 'center', marginTop: 8 }}>
+            {loadingMore ? (
+              <span style={{ color: t.muted, fontSize: 13.5 }}>{str.loadingMore}</span>
+            ) : hasMore ? (
+              <button
+                onClick={onLoadMore}
+                style={{
+                  background: 'none',
+                  border: `1px solid ${t.accent}`,
+                  color: t.accent,
+                  borderRadius: 999,
+                  padding: '9px 28px',
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {str.loadMore}
+              </button>
+            ) : null}
+          </div>
+        </>
       )}
     </div>
   );

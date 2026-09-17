@@ -1,5 +1,6 @@
+import { useState, useEffect, useRef } from 'react';
 import { Star, Heart, Bookmark } from 'lucide-react';
-import { getImageUrl } from '../services/tmdb';
+import { getImageUrl, getMovieVideos, pickTrailerKey } from '../services/tmdb';
 
 // TMDB genre ID → readable name mapping
 export const GENRE_MAP = {
@@ -23,14 +24,45 @@ export const GENRE_MAP = {
  * We combine it with their image CDN to get the full URL:
  * https://image.tmdb.org/t/p/w500/abc123.jpg
  */
-export default function MovieCard({ movie, t, str, index, onExclude, isFavorite, onToggleFavorite, isWatchlisted, onToggleWatchlist, onSelect }) {
+export default function MovieCard({ movie, t, str, genreMap, index, onExclude, isFavorite, onToggleFavorite, isWatchlisted, onToggleWatchlist, onSelect }) {
   const posterUrl = getImageUrl(movie.poster_path, 'w342');
+  const tinyUrl = getImageUrl(movie.poster_path, 'w92');
+  const names = genreMap ?? GENRE_MAP;
   const year = movie.release_date ? new Date(movie.release_date).getFullYear() : '—';
   const rating = movie.vote_average ? movie.vote_average.toFixed(1) : '—';
   const genres = (movie.genre_ids || [])
-    .map((id) => GENRE_MAP[id])
+    .map((id) => names[id])
     .filter(Boolean)
     .slice(0, 3); // Show max 3 genre tags
+
+  // Blur-up poster: tiny w92 blurred under the w342, crossfading on load
+  const [fullLoaded, setFullLoaded] = useState(false);
+  // Hover trailer preview (fine-pointer desktops only, 600ms dwell)
+  const [previewKey, setPreviewKey] = useState(null);
+  const hoverTimer = useRef(null);
+  useEffect(() => {
+    setFullLoaded(false);
+    setPreviewKey(null);
+    return () => clearTimeout(hoverTimer.current);
+  }, [movie.id]);
+  const canHoverPreview =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
+  function onCardEnter() {
+    if (!canHoverPreview || previewKey || !movie.id) return;
+    hoverTimer.current = setTimeout(() => {
+      getMovieVideos(movie.id, movie.kind === 'tv' ? 'tv' : 'movie')
+        .then((v) => {
+          const k = pickTrailerKey(v);
+          if (k) setPreviewKey(k);
+        })
+        .catch(() => {});
+    }, 600);
+  }
+  function onCardLeave() {
+    clearTimeout(hoverTimer.current);
+    setPreviewKey(null);
+  }
 
   // Truncate overview to ~120 chars for card layout
   const overview = movie.overview
@@ -43,6 +75,8 @@ export default function MovieCard({ movie, t, str, index, onExclude, isFavorite,
     <div
       className="card"
       onClick={() => onSelect?.(movie)}
+      onMouseEnter={onCardEnter}
+      onMouseLeave={onCardLeave}
       title={str.viewDetailsFor(movie.title)}
       style={{
         // True glass: mostly-transparent body so the ambient backdrop pours
@@ -67,21 +101,70 @@ export default function MovieCard({ movie, t, str, index, onExclude, isFavorite,
         cursor: onSelect ? 'pointer' : 'default',
       }}
     >
-      {/* Poster */}
+      {/* Poster — blur-up loading + hover trailer preview */}
       {posterUrl ? (
-        <img
-          src={posterUrl}
-          alt={`${movie.title} poster`}
-          loading="lazy"
+        <div
           style={{
+            position: 'relative',
             width: '100%',
             aspectRatio: '2 / 3',
-            objectFit: 'cover',
+            overflow: 'hidden',
             borderRadius: '12px 12px 0 0',
-            display: 'block',
             background: t.border,
           }}
-        />
+        >
+          {tinyUrl && !previewKey && (
+            <img
+              src={tinyUrl}
+              alt=""
+              aria-hidden
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                filter: 'blur(14px)',
+                transform: 'scale(1.06)',
+                opacity: fullLoaded ? 0 : 1,
+                transition: 'opacity 0.4s ease',
+              }}
+            />
+          )}
+          {!previewKey && (
+            <img
+              src={posterUrl}
+              alt={`${movie.title} poster`}
+              loading="lazy"
+              onLoad={() => setFullLoaded(true)}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                opacity: fullLoaded ? 1 : 0,
+                transition: 'opacity 0.5s ease',
+              }}
+            />
+          )}
+          {previewKey && (
+            <iframe
+              title={`${movie.title} preview`}
+              src={`https://www.youtube.com/embed/${previewKey}?autoplay=1&mute=1&controls=0&rel=0&loop=1&playlist=${previewKey}`}
+              allow="autoplay; encrypted-media"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                pointerEvents: 'none',
+              }}
+            />
+          )}
+        </div>
       ) : (
         <div
           style={{
