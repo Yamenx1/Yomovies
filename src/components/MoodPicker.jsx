@@ -128,7 +128,7 @@ export default function MoodPicker({
   }
 
   async function runSearch(text, kindOverride) {
-    const query = text.trim();
+    const query = (text ?? '').trim();
     if (!query || busy) return;
     const k = kindOverride ?? kind;
     setError(null);
