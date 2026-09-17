@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { useAction } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { X, Star, Clock, Calendar, Play } from 'lucide-react';
 import StarRating from './StarRating';
 import {
@@ -27,6 +29,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
   const [similar, setSimilar] = useState([]);
   const [providers, setProviders] = useState([]);
   const [watchLink, setWatchLink] = useState(null);
+  const [jwLinks, setJwLinks] = useState([]);
   const [showTrailer, setShowTrailer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -115,7 +118,35 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
   const d = details ?? movie;
   const kind = movie.kind === 'tv' || d.name ? 'tv' : 'movie';
   const title = d.title ?? d.name ?? movie.title;
-  const release = d.release_date ?? d.first_air_date ?? movie.release_date;
+  const getDeepLinks = useAction(api.watchLinks.deepLinks);
+
+  // True provider deep links (JustWatch, cached server-side). Badges
+  // upgrade to them when they land; fallbacks show meanwhile.
+  useEffect(() => {
+    let cancelled = false;
+    setJwLinks([]);
+    const label = d.title ?? d.name ?? movie.title;
+    if (!label) return;
+    getDeepLinks({ tmdbId: movie.id, title: label, kind })
+      .then((r) => {
+        if (!cancelled) setJwLinks(r?.links ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [movie.id, kind, getDeepLinks, d.title, d.name, movie.title]);
+
+  function jwUrlFor(providerName) {
+    const n = (providerName ?? '').toLowerCase();
+    const first = n.split(' ')[0];
+    const hit = jwLinks.find(
+      (l) =>
+        n.includes(l.provider.toLowerCase()) ||
+        l.provider.toLowerCase().includes(first)
+    );
+    return hit?.url ?? null;
+  }  const release = d.release_date ?? d.first_air_date ?? movie.release_date;
   const backdropUrl = getImageUrl(d.backdrop_path, 'w780');
   const posterUrl = getImageUrl(d.poster_path, 'w342');
   const year = release ? new Date(release).getFullYear() : '—';
@@ -432,9 +463,11 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
               </h3>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {providers.map((p) => {
-                  // Real service link when the provider has a stable public
-                  // search URL, otherwise the TMDB watch page for this title
-                  const href = providerLink(p.provider_name, title, watchLink);
+                  // True JustWatch deep link when we have one for this
+                  // provider, else the service search / TMDB watch fallback
+                  const href =
+                    jwUrlFor(p.provider_name) ??
+                    providerLink(p.provider_name, title, watchLink);
                   const badge = (
                     <>
                       {p.logo_path && (

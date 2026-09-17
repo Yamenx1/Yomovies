@@ -83,6 +83,15 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
 
+  // JustWatch deep-link cache: per-title provider URLs scraped from
+  // JustWatch SA pages (free, keyless). Refreshed on miss only.
+  jwCache: defineTable({
+    tmdbId: v.number(),
+    kind: v.string(), // 'movie' | 'tv'
+    links: v.array(v.object({ provider: v.string(), url: v.string() })),
+    createdAt: v.number(),
+  }).index("by_tmdb", ["tmdbId", "kind"]),
+
   // Personal star ratings + optional mini-reviews. High ratings amplify
   // the taste profile, low ratings push those genres down.
   ratings: defineTable({
