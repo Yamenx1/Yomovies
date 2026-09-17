@@ -25,6 +25,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
   const [trailerKey, setTrailerKey] = useState(null);
   const [similar, setSimilar] = useState([]);
   const [providers, setProviders] = useState([]);
+  const [watchLink, setWatchLink] = useState(null);
   const [showTrailer, setShowTrailer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -37,6 +38,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
     setTrailerKey(null);
     setSimilar([]);
     setProviders([]);
+    setWatchLink(null);
     setDetails(null);
     setCredits(null);
     const fk = movie.kind === 'tv' ? 'tv' : 'movie';
@@ -55,7 +57,9 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
           setSimilar(
             (s?.results ?? []).filter((m) => m.poster_path).slice(0, 10)
           );
-          setProviders(pickProviders(w).providers);
+          const picked = pickProviders(w);
+          setProviders(picked.providers);
+          setWatchLink(picked.link);
           setLoading(false);
         }
       })
@@ -426,31 +430,48 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
                 {str.whereToWatch ?? 'Where to watch'}
               </h3>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {providers.map((p) => (
-                  <span
-                    key={p.provider_id}
-                    title={p.provider_name}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 7,
-                      background: `${t.accent}12`,
-                      border: `1px solid ${t.border}`,
-                      borderRadius: 999,
-                      padding: '4px 12px 4px 4px',
-                      fontSize: 12,
-                    }}
-                  >
-                    {p.logo_path && (
-                      <img
-                        src={getImageUrl(p.logo_path, 'w92')}
-                        alt=""
-                        style={{ width: 24, height: 24, borderRadius: 999 }}
-                      />
-                    )}
-                    {p.provider_name}
-                  </span>
-                ))}
+                {providers.map((p) => {
+                  const badge = (
+                    <>
+                      {p.logo_path && (
+                        <img
+                          src={getImageUrl(p.logo_path, 'w92')}
+                          alt=""
+                          style={{ width: 24, height: 24, borderRadius: 999 }}
+                        />
+                      )}
+                      {p.provider_name}
+                    </>
+                  );
+                  const chipStyle = {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 7,
+                    background: `${t.accent}12`,
+                    border: `1px solid ${t.border}`,
+                    borderRadius: 999,
+                    padding: '4px 12px 4px 4px',
+                    fontSize: 12,
+                    color: t.text,
+                    textDecoration: 'none',
+                  };
+                  return watchLink ? (
+                    <a
+                      key={p.provider_id}
+                      href={watchLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`${p.provider_name} — open watch options`}
+                      style={chipStyle}
+                    >
+                      {badge}
+                    </a>
+                  ) : (
+                    <span key={p.provider_id} title={p.provider_name} style={chipStyle}>
+                      {badge}
+                    </span>
+                  );
+                })}
               </div>
             </>
           )}

@@ -170,19 +170,20 @@ export async function getWatchProviders(movieId, kind = 'movie') {
 
 /**
  * Pick the provider entry for the viewer's region (Saudi default,
- * with sane fallbacks). Returns { providers, region } — providers have
- * { provider_id, provider_name, logo_path }.
+ * with sane fallbacks). Returns { providers, region, link } — providers
+ * have { provider_id, provider_name, logo_path }; link is TMDB's watch
+ * page for this title+region (provider deep links aren't exposed by TMDB).
  */
 export function pickProviders(watchData, region = 'SA') {
   const results = watchData?.results ?? {};
   const entry =
     results[region] ?? results.US ?? Object.values(results)[0] ?? null;
-  if (!entry) return { providers: [], region };
+  if (!entry) return { providers: [], region, link: null };
   const seen = new Map();
   for (const p of [...(entry.flatrate ?? []), ...(entry.rent ?? []), ...(entry.buy ?? [])]) {
     if (!seen.has(p.provider_id)) seen.set(p.provider_id, p);
   }
-  return { providers: [...seen.values()].slice(0, 6), region };
+  return { providers: [...seen.values()].slice(0, 6), region, link: entry.link ?? null };
 }
 
 /**
