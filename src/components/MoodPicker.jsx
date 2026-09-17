@@ -45,6 +45,8 @@ export default function MoodPicker({
   t,
   str,
   lang,
+  kind,
+  onKindChange,
   onResults,
   onSearchLoading,
   onSearchError,
@@ -80,23 +82,28 @@ export default function MoodPicker({
     }
   }
 
-  // Deep link: ?q=<search> runs once on load so shared links replay
+  // Deep link: ?q=<search>&kind=tv runs once on load so shared links replay
   const deepLinked = useRef(false);
   useEffect(() => {
     if (deepLinked.current) return;
     deepLinked.current = true;
-    const q = new URLSearchParams(window.location.search).get('q');
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    const deepKind = params.get('kind') === 'tv' ? 'tv' : 'movie';
+    if (deepKind === 'tv' && onKindChange) onKindChange('tv');
     if (q && q.trim()) {
       setFreeText(q.trim());
-      runSearch(q.trim());
+      runSearch(q.trim(), deepKind);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep the URL shareable: every search rewrites ?q= without reloading
-  function syncUrl(query) {
+  // Keep the URL shareable: every search rewrites ?q= (+kind) without reloading
+  function syncUrl(query, k) {
     const url = new URL(window.location.href);
     url.searchParams.set('q', query);
+    if ((k ?? kind) === 'tv') url.searchParams.set('kind', 'tv');
+    else url.searchParams.delete('kind');
     window.history.replaceState(null, '', url);
   }
 
@@ -120,17 +127,18 @@ export default function MoodPicker({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function runSearch(text) {
+  async function runSearch(text, kindOverride) {
     const query = text.trim();
     if (!query || busy) return;
+    const k = kindOverride ?? kind;
     setError(null);
     setSugOpen(false);
     setBusy(true);
     onSearchLoading(true);
     try {
-      const result = await recommend({ text: query, lang });
+      const result = await recommend({ text: query, lang, kind: k });
       setLastQuery(query);
-      syncUrl(query);
+      syncUrl(query, k);
       rememberSearch(query);
       onResults({ movies: result.movies ?? [], reason: result.reason ?? null });
     } catch (err) {
@@ -181,18 +189,19 @@ export default function MoodPicker({
     }
     setSugHi(-1);
     const timer = setTimeout(() => {
-      searchMovies(q)
+      searchMovies(q, kind)
         .then((data) => {
           const top = (data.results ?? [])
             .filter((m) => m.poster_path)
-            .slice(0, 6);
+            .slice(0, 6)
+            .map((m) => ({ ...m, kind }));
           setSuggest(top);
           setSugOpen(top.length > 0);
         })
         .catch(() => {});
     }, 350);
     return () => clearTimeout(timer);
-  }, [freeText]);
+  }, [freeText, kind]);
 
   function runExample(example) {
     setFreeText(example);
@@ -254,6 +263,45 @@ export default function MoodPicker({
           </span>
         </div>
       )}
+
+      {/* Movies / TV toggle */}
+      <div
+        style={{
+          display: 'inline-flex',
+          background: t.surface,
+          border: `1px solid ${t.border}`,
+          borderRadius: 999,
+          padding: 3,
+          marginBottom: 20,
+        }}
+        role="tablist"
+        aria-label="Content type"
+      >
+        {[
+          { id: 'movie', label: str.moviesTab },
+          { id: 'tv', label: str.tvTab },
+        ].map((opt) => (
+          <button
+            key={opt.id}
+            role="tab"
+            aria-selected={kind === opt.id}
+            onClick={() => onKindChange?.(opt.id)}
+            style={{
+              background: kind === opt.id ? t.accent : 'none',
+              color: kind === opt.id ? '#151A24' : t.muted,
+              border: 'none',
+              borderRadius: 999,
+              padding: '7px 22px',
+              fontSize: 13.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
 
       {/* Free-text input + autocomplete */}
       <form

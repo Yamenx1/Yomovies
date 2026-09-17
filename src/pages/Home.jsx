@@ -7,15 +7,15 @@
 // ---------------------------------------------------------------------------
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useConvexAuth } from 'convex/react';
 import THEMES from '../config/theme';
-import { STRINGS } from '../config/strings';
-import { isApiKeyConfigured, getTrending, getImageUrl, setTmdbLang } from '../services/tmdb';
+import { isApiKeyConfigured, getTrending, getImageUrl } from '../services/tmdb';
 import { useSurpriseMovies } from '../hooks/useMovies';
 import { useUserData } from '../hooks/useUserData';
 import { useGuestData } from '../hooks/useGuestData';
 import { useTasteProfile } from '../hooks/useTasteProfile';
+import { useLang } from '../hooks/useLang';
 import Header from '../components/Header';
 import MoodPicker from '../components/MoodPicker';
 import MovieGrid from '../components/MovieGrid';
@@ -27,35 +27,35 @@ export default function Home() {
   const user = useUserData();
   const guest = useGuestData();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id: urlMovieId } = useParams();
+  // /tv/:id deep links carry the kind in the path; /movie/:id is movies
+  const urlKind = location.pathname.startsWith('/tv/') ? 'tv' : 'movie';
 
   // --- Language (persisted per browser, flips RTL + TMDB language) ---
-  const [lang, setLang] = useState(() => {
+  const { lang, str, toggleLang } = useLang();
+
+  // --- Content kind: movies or TV shows (persisted, drives AI + feeds) ---
+  const [kind, setKindState] = useState(() => {
     try {
-      return localStorage.getItem('yo-lang') === 'ar' ? 'ar' : 'en';
+      return localStorage.getItem('yo-kind') === 'tv' ? 'tv' : 'movie';
     } catch {
-      return 'en';
+      return 'movie';
     }
   });
-  const str = STRINGS[lang] ?? STRINGS.en;
-  useEffect(() => {
+  const changeKind = useCallback((next) => {
+    setKindState(next);
     try {
-      localStorage.setItem('yo-lang', lang);
+      localStorage.setItem('yo-kind', next);
     } catch {}
-    document.documentElement.lang = lang;
-    document.documentElement.dir = str.dir;
-    setTmdbLang(lang === 'ar' ? 'ar-SA' : 'en-US');
-  }, [lang, str.dir]);
-  const toggleLang = useCallback(() => {
-    setLang((prev) => (prev === 'ar' ? 'en' : 'ar'));
   }, []);
 
   // AI search results (null = nothing searched yet)
   const [search, setSearch] = useState(null);
 
-  // Random-movie surprise (null = off). A fresh seed redeals the hand.
+  // Random picks surprise (null = off). A fresh seed redeals the hand.
   const [surpriseSeed, setSurpriseSeed] = useState(null);
-  const surprise = useSurpriseMovies(surpriseSeed);
+  const surprise = useSurpriseMovies(surpriseSeed, kind);
 
   // Opened movie (details overlay). Null = grid view.
   // The overlay is route-driven: /movie/:id opens it (shareable URL),
@@ -63,8 +63,9 @@ export default function Home() {
   const [selectedMovie, setSelectedMovie] = useState(null);
   const openMovie = useCallback((movie) => {
     if (!movie) return;
+    const k = movie.kind === 'tv' ? 'tv' : 'movie';
     setSelectedMovie(movie);
-    navigate(`/movie/${movie.id}`);
+    navigate(`/${k}/${movie.id}`);
   }, [navigate]);
   const closeMovie = useCallback(() => {
     setSelectedMovie(null);
@@ -74,12 +75,16 @@ export default function Home() {
     if (urlMovieId) {
       const nid = Number(urlMovieId);
       if (!Number.isNaN(nid)) {
-        setSelectedMovie((prev) => (prev?.id === nid ? prev : { id: nid }));
+        setSelectedMovie((prev) =>
+          prev?.id === nid && (prev.kind ?? 'movie') === urlKind
+            ? prev
+            : { id: nid, kind: urlKind }
+        );
       }
     } else {
       setSelectedMovie(null);
     }
-  }, [urlMovieId]);
+  }, [urlMovieId, urlKind]);
 
   // Result filters (reset on every new search / surprise / home)
   const [minRating, setMinRating] = useState(0);
@@ -99,12 +104,13 @@ export default function Home() {
   const [trending, setTrending] = useState([]);
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getTrending('week', 1), getTrending('week', 2)])
+    setTrending([]);
+    Promise.all([getTrending('week', 1, kind), getTrending('week', 2, kind)])
       .then(([a, b]) => {
         if (cancelled) return;
         const seen = new Map();
         for (const m of [...(a.results ?? []), ...(b.results ?? [])]) {
-          if (m.poster_path && !seen.has(m.id)) seen.set(m.id, m);
+          if (m.poster_path && !seen.has(m.id)) seen.set(m.id, { ...m, kind });
         }
         setTrending([...seen.values()].slice(0, 18));
       })
@@ -112,7 +118,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [kind]);
   const collage = trending.map((m) => getImageUrl(m.poster_path, 'w342'));
 
   // Cursor-reactive glow: writes CSS vars straight to the DOM node,
@@ -180,13 +186,56 @@ export default function Home() {
     isAuthenticated,
     favoritesList: user.favoritesList,
     watchlistList: user.watchlistList,
+    ratingsList: user.ratingsList,
     localFavorites: guest.localFavorites,
     localWatchlist: guest.localWatchlist,
+    localRatings: guest.localRatings,
     guestMeta: guest.readGuestMeta(),
     viewingMovies: viewing.movies,
     trending,
     excludedIds: new Set([...favoriteIds, ...watchlistIds, ...excludedSet]),
   });
+
+  // Rate a movie 1–5 ( null clears ). Feeds the taste profile.
+  const handleRate = useCallback((movie, rating) => {
+    if (isAuthenticated) {
+      if (rating == null) {
+        user.mutations.removeRating({ tmdbId: movie.id }).catch(() => {});
+      } else {
+        user.mutations
+          .setRating({
+            tmdbId: movie.id,
+            title: movie.title,
+            posterPath: movie.poster_path ?? undefined,
+            kind: movie.kind ?? kind,
+            genreIds: movie.genre_ids ?? undefined,
+            rating,
+          })
+          .catch(() => {});
+      }
+    } else {
+      guest.setGuestRating(
+        movie.id,
+        rating == null
+          ? null
+          : {
+              rating,
+              title: movie.title,
+              posterPath: movie.poster_path ?? null,
+              genre_ids: movie.genre_ids ?? [],
+              kind: movie.kind ?? kind,
+            }
+      );
+    }
+  }, [isAuthenticated, user, guest, kind]);
+
+  const ratingFor = useCallback((movieId) => {
+    if (movieId == null) return null;
+    if (isAuthenticated) {
+      return user.ratingsList?.find((r) => r.tmdbId === movieId)?.rating ?? null;
+    }
+    return guest.localRatings[movieId]?.rating ?? null;
+  }, [isAuthenticated, user.ratingsList, guest.localRatings]);
 
   const favoriteItems = isAuthenticated
     ? user.favoriteItems
@@ -278,6 +327,7 @@ export default function Home() {
               tmdbId: movie.id,
               title: movie.title,
               posterPath: movie.poster_path ?? undefined,
+              kind: movie.kind ?? kind,
               genreIds: movie.genre_ids ?? undefined,
             })
             .catch(() => {});
@@ -286,7 +336,7 @@ export default function Home() {
         guest.toggleFavorite(movie);
       }
     },
-    [isAuthenticated, favoriteIds, user, guest]
+    [isAuthenticated, favoriteIds, user, guest, kind]
   );
 
   const handleToggleWatchlist = useCallback(
@@ -300,6 +350,7 @@ export default function Home() {
               tmdbId: movie.id,
               title: movie.title,
               posterPath: movie.poster_path ?? undefined,
+              kind: movie.kind ?? kind,
               genreIds: movie.genre_ids ?? undefined,
             })
             .catch(() => {});
@@ -308,7 +359,7 @@ export default function Home() {
         guest.toggleWatchlist(movie);
       }
     },
-    [isAuthenticated, watchlistIds, user, guest]
+    [isAuthenticated, watchlistIds, user, guest, kind]
   );
 
   // Check if API key is configured
@@ -578,6 +629,8 @@ export default function Home() {
         t={t}
         str={str}
         lang={lang}
+        kind={kind}
+        onKindChange={changeKind}
         onResults={handleResults}
         onSearchLoading={handleSearchLoading}
         onSearchError={handleSearchError}
@@ -829,6 +882,8 @@ export default function Home() {
             onSelectMovie={openMovie}
             isWatchlisted={watchlistIds.has(movie.id)}
             onToggleWatchlist={() => handleToggleWatchlist(movie)}
+            userRating={ratingFor(movie.id)}
+            onRate={(rating) => handleRate(movie, rating)}
           />
         );
       })()}

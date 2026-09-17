@@ -92,8 +92,8 @@ export function getImageUrl(path, size = 'w500') {
  * @param {string} timeWindow - 'day' or 'week'
  * @returns {Promise<object>} - { results: [...movies], total_pages, ... }
  */
-export async function getTrending(timeWindow = 'day', page = 1) {
-  return fetchFromTMDB(`/trending/movie/${timeWindow}`, { page });
+export async function getTrending(timeWindow = 'day', page = 1, kind = 'movie') {
+  return fetchFromTMDB(`/trending/${kind}/${timeWindow}`, { page });
 }
 
 /**
@@ -136,8 +136,8 @@ export async function discoverByGenre(genreIds, options = {}) {
  * @param {number} movieId - TMDB movie ID
  * @returns {Promise<object>} - Full movie details
  */
-export async function getMovieDetails(movieId) {
-  return fetchFromTMDB(`/movie/${movieId}`);
+export async function getMovieDetails(movieId, kind = 'movie') {
+  return fetchFromTMDB(`/${kind}/${movieId}`);
 }
 
 /**
@@ -146,8 +146,8 @@ export async function getMovieDetails(movieId) {
  * @param {number} movieId - TMDB movie ID
  * @returns {Promise<object>} - { cast: [...], crew: [...] }
  */
-export async function getMovieCredits(movieId) {
-  return fetchFromTMDB(`/movie/${movieId}/credits`);
+export async function getMovieCredits(movieId, kind = 'movie') {
+  return fetchFromTMDB(`/${kind}/${movieId}/credits`);
 }
 
 /**
@@ -156,16 +156,16 @@ export async function getMovieCredits(movieId) {
  * @param {number} movieId - TMDB movie ID
  * @returns {Promise<object>} - { results: [{ key, site, type, ... }] }
  */
-export async function getMovieVideos(movieId) {
-  return fetchFromTMDB(`/movie/${movieId}/videos`);
+export async function getMovieVideos(movieId, kind = 'movie') {
+  return fetchFromTMDB(`/${kind}/${movieId}/videos`);
 }
 
 /**
  * Get streaming/rent/buy providers for a movie, by country.
  * Returns TMDB's { results: { SA: { flatrate: [...], rent, buy }, ... } }.
  */
-export async function getWatchProviders(movieId) {
-  return fetchFromTMDB(`/movie/${movieId}/watch/providers`);
+export async function getWatchProviders(movieId, kind = 'movie') {
+  return fetchFromTMDB(`/${kind}/${movieId}/watch/providers`);
 }
 
 /**
@@ -192,8 +192,8 @@ export function pickProviders(watchData, region = 'SA') {
  * @param {number} page - Page number (default: 1)
  * @returns {Promise<object>} - { results: [...movies] }
  */
-export async function getSimilarMovies(movieId, page = 1) {
-  return fetchFromTMDB(`/movie/${movieId}/similar`, { page });
+export async function getSimilarMovies(movieId, page = 1, kind = 'movie') {
+  return fetchFromTMDB(`/${kind}/${movieId}/similar`, { page });
 }
 
 /**
@@ -213,13 +213,14 @@ export function pickTrailerKey(videos) {
 }
 
 /**
- * Search movies by title.
+ * Search movies or TV shows by title.
  *
  * @param {string} query - Search query
- * @returns {Promise<object>} - { results: [...movies], ... }
+ * @param {string} kind - 'movie' or 'tv'
+ * @returns {Promise<object>} - { results: [...] }
  */
-export async function searchMovies(query) {
-  return fetchFromTMDB('/search/movie', { query, include_adult: 'false' });
+export async function searchMovies(query, kind = 'movie') {
+  return fetchFromTMDB(`/search/${kind}`, { query, include_adult: 'false' });
 }
 
 /**

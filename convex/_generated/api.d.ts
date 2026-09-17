@@ -13,6 +13,7 @@ import type * as aiRecommend from "../aiRecommend.js";
 import type * as crons from "../crons.js";
 import type * as favorites from "../favorites.js";
 import type * as preferences from "../preferences.js";
+import type * as ratings from "../ratings.js";
 import type * as recent from "../recent.js";
 import type * as watched from "../watched.js";
 import type * as watchlist from "../watchlist.js";
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   favorites: typeof favorites;
   preferences: typeof preferences;
+  ratings: typeof ratings;
   recent: typeof recent;
   watched: typeof watched;
   watchlist: typeof watchlist;

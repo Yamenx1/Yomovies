@@ -1,5 +1,6 @@
-import { Sun, Moon, Heart } from 'lucide-react';
+import { Sun, Moon, Heart, User } from 'lucide-react';
 import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * Header — Logo + site name + Clerk auth controls + dark/light mode toggle.
@@ -8,6 +9,7 @@ import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
  * When signed in: shows Clerk UserButton
  */
 export default function Header({ theme, t, str, lang, onToggleLang, onToggleTheme, onHome, onOpenFavorites, favCount }) {
+  const navigate = useNavigate();
   return (
     <>
       <header
@@ -96,6 +98,27 @@ export default function Header({ theme, t, str, lang, onToggleLang, onToggleThem
           <Show when="signed-in">
             <UserButton afterSignOutUrl="/" />
           </Show>
+
+          {/* Profile */}
+          <button
+            onClick={() => navigate('/profile')}
+            title={str.profileTitle}
+            aria-label={str.profileTitle}
+            style={{
+              background: t.surface,
+              border: `1px solid ${t.border}`,
+              borderRadius: 999,
+              width: 38,
+              height: 38,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: t.text,
+            }}
+          >
+            <User size={16} />
+          </button>
 
           {/* Favorites */}
           <button

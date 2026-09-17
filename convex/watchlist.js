@@ -20,6 +20,7 @@ export const add = mutation({
     tmdbId: v.number(),
     title: v.string(),
     posterPath: v.optional(v.string()),
+    kind: v.optional(v.string()),
     genreIds: v.optional(v.array(v.number())),
   },
   handler: async (ctx, args) => {
@@ -42,6 +43,7 @@ export const add = mutation({
       tmdbId: args.tmdbId,
       title: args.title,
       posterPath: args.posterPath,
+      kind: args.kind,
       genre_ids: args.genreIds,
       addedAt: Date.now(),
     });

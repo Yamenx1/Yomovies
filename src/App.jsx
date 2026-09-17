@@ -9,12 +9,15 @@
 
 import { Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
+import ProfilePage from './pages/ProfilePage';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/movie/:id" element={<Home />} />
+      <Route path="/tv/:id" element={<Home />} />
+      <Route path="/profile" element={<ProfilePage />} />
     </Routes>
   );
 }

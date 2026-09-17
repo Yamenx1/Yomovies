@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Star, Clock, Calendar, Play } from 'lucide-react';
+import StarRating from './StarRating';
 import {
   getMovieDetails,
   getMovieCredits,
@@ -18,7 +19,7 @@ import { GENRE_MAP } from './MovieCard';
  * overview, top cast, and a "More like this" rail. Fetched live from TMDB
  * on open (cached by the tmdb service).
  */
-export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, isWatchlisted, onToggleWatchlist }) {
+export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, isWatchlisted, onToggleWatchlist, userRating, onRate }) {
   const [details, setDetails] = useState(null);
   const [credits, setCredits] = useState(null);
   const [trailerKey, setTrailerKey] = useState(null);
@@ -36,12 +37,15 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
     setTrailerKey(null);
     setSimilar([]);
     setProviders([]);
+    setDetails(null);
+    setCredits(null);
+    const fk = movie.kind === 'tv' ? 'tv' : 'movie';
     Promise.all([
-      getMovieDetails(movie.id),
-      getMovieCredits(movie.id),
-      getMovieVideos(movie.id).catch(() => null),
-      getSimilarMovies(movie.id).catch(() => null),
-      getWatchProviders(movie.id).catch(() => null),
+      getMovieDetails(movie.id, fk),
+      getMovieCredits(movie.id, fk),
+      getMovieVideos(movie.id, fk).catch(() => null),
+      getSimilarMovies(movie.id, 1, fk).catch(() => null),
+      getWatchProviders(movie.id, fk).catch(() => null),
     ])
       .then(([d, c, v, s, w]) => {
         if (!cancelled) {
@@ -64,7 +68,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
     return () => {
       cancelled = true;
     };
-  }, [movie.id]);
+  }, [movie.id, movie.kind]);
 
   // Close on Escape
   useEffect(() => {
@@ -75,12 +79,41 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Focus trap: keep Tab inside the dialog, return focus on unmount
+  const panelRef = useRef(null);
+  useEffect(() => {
+    const prev = document.activeElement;
+    panelRef.current?.focus();
+    const trap = (e) => {
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const focusables = [...panelRef.current.querySelectorAll(
+        'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )].filter((el) => !el.disabled);
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', trap);
+    return () => {
+      document.removeEventListener('keydown', trap);
+      if (prev && prev.focus) prev.focus();
+    };
+  }, []);
+
   const d = details ?? movie;
+  const kind = movie.kind === 'tv' || d.name ? 'tv' : 'movie';
+  const title = d.title ?? d.name ?? movie.title;
+  const release = d.release_date ?? d.first_air_date ?? movie.release_date;
   const backdropUrl = getImageUrl(d.backdrop_path, 'w780');
   const posterUrl = getImageUrl(d.poster_path, 'w342');
-  const year = (d.release_date ?? movie.release_date)
-    ? new Date(d.release_date ?? movie.release_date).getFullYear()
-    : '—';
+  const year = release ? new Date(release).getFullYear() : '—';
   const rating = d.vote_average ? d.vote_average.toFixed(1) : '—';
   const genres = (d.genres ?? [])
     .map((g) => g.name)
@@ -90,7 +123,13 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
   const cast = (credits?.cast ?? []).slice(0, 6);
   const runtime = d.runtime
     ? `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`
-    : null;
+    : d.episode_run_time?.[0]
+      ? `${d.episode_run_time[0]}m / ep`
+      : null;
+  const seasons =
+    d.number_of_seasons != null
+      ? `${d.number_of_seasons} ${str.seasons}`
+      : null;
 
   return (
     <div
@@ -111,6 +150,11 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
       <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
       <div
         onClick={(e) => e.stopPropagation()}
+        ref={panelRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         style={{
           background: t.dark
             ? 'linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02) 40%), rgba(31,37,52,0.55)'
@@ -135,7 +179,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
         {showTrailer && trailerKey ? (
           <div style={{ width: '100%', aspectRatio: '16 / 8', background: '#000', borderRadius: '16px 16px 0 0', overflow: 'hidden' }}>
             <iframe
-              title={str.trailerOf(d.title)}
+              title={str.trailerOf(title)}
               src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&rel=0`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
@@ -159,7 +203,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
               {trailerKey && (
                 <button
                   onClick={() => setShowTrailer(true)}
-                  aria-label={str.playTrailer(d.title)}
+                  aria-label={str.playTrailer(title)}
                   style={{
                     position: 'absolute',
                     inset: 0,
@@ -218,7 +262,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
             {posterUrl && (
               <img
                 src={posterUrl}
-                alt={`${d.title} poster`}
+                alt={`${title} poster`}
                 style={{
                   width: 130,
                   borderRadius: 10,
@@ -237,7 +281,7 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
                   margin: '0 0 8px',
                 }}
               >
-                {d.title}
+                {title}
               </h2>
               {d.tagline && (
                 <p
@@ -276,6 +320,11 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
                     <Clock size={13} /> {runtime}
                   </span>
                 )}
+                {seasons && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {seasons}
+                  </span>
+                )}
               </div>
               {genres.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -294,6 +343,21 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
                       {g}
                     </span>
                   ))}
+                </div>
+              )}
+              {onRate && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    marginTop: 12,
+                  }}
+                >
+                  <span style={{ fontSize: 13, color: t.muted }}>
+                    {str.yourRating}
+                  </span>
+                  <StarRating value={userRating} onRate={onRate} t={t} size={20} />
                 </div>
               )}
             </div>
@@ -409,10 +473,10 @@ export default function MovieDetails({ movie, t, str, onClose, onSelectMovie, is
                   <img
                     key={s.id}
                     src={getImageUrl(s.poster_path, 'w185')}
-                    alt={s.title}
-                    title={s.title}
+                    alt={s.title ?? s.name}
+                    title={s.title ?? s.name}
                     loading="lazy"
-                    onClick={() => onSelectMovie?.(s)}
+                    onClick={() => onSelectMovie?.({ ...s, kind })}
                     style={{
                       width: 84,
                       aspectRatio: '2 / 3',

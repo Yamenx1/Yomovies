@@ -27,11 +27,11 @@ function shuffleSeeded(arr, seed) {
 }
 
 /**
- * Totally random movies — ignores everything. Pulls a random trending page
+ * Totally random picks — ignores everything. Pulls a random trending page
  * and shuffles it with the given seed, so every "Surprise me" click deals a
  * fresh hand. Pass seed=null for idle.
  */
-export function useSurpriseMovies(seed) {
+export function useSurpriseMovies(seed, kind = 'movie') {
   const [state, setState] = useState({ movies: [], loading: false, error: null });
 
   useEffect(() => {
@@ -44,12 +44,14 @@ export function useSurpriseMovies(seed) {
 
     // Random page each time (TMDB trending has plenty of pages)
     const page = 1 + Math.floor(Math.random() * 10);
-    getTrending('week', page)
+    getTrending('week', page, kind)
       .then((data) => {
         if (cancelled) return;
         const withPosters = (data.results ?? []).filter((m) => m.poster_path);
         setState({
-          movies: shuffleSeeded(withPosters, seed).slice(0, 24),
+          movies: shuffleSeeded(withPosters, seed)
+            .slice(0, 24)
+            .map((m) => ({ ...m, kind })),
           loading: false,
           error: null,
         });
@@ -61,7 +63,7 @@ export function useSurpriseMovies(seed) {
     return () => {
       cancelled = true;
     };
-  }, [seed]);
+  }, [seed, kind]);
 
   return state;
 }

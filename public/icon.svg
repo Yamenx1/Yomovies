@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect x="16" y="16" width="480" height="480" rx="110" fill="#151A24"/>
+  <rect x="16" y="16" width="480" height="480" rx="110" fill="none" stroke="#FF6B4A" stroke-width="14" opacity="0.9"/>
+  <text x="256" y="300" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="150" letter-spacing="8" fill="#F2EFE6">YO</text>
+  <text x="256" y="368" text-anchor="middle" font-family="Arial, sans-serif" font-weight="700" font-size="44" letter-spacing="14" fill="#FF6B4A">MOVIES</text>
+  <rect x="156" y="392" width="200" height="10" rx="5" fill="#FF6B4A"/>
+</svg>

@@ -37,7 +37,7 @@ export default class ErrorBoundary extends React.Component {
         >
           <div style={{ maxWidth: 560 }}>
             <h1 style={{ fontSize: 20, margin: '0 0 12px' }}>
-              😕 YoMovies failed to start
+               YoMovies failed to start
             </h1>
             <pre
               style={{

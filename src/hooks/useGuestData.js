@@ -11,10 +11,16 @@ import { useState, useCallback } from 'react';
 const GUEST_META_KEY = 'yo-meta';
 
 function rememberGuestMeta(movie) {
-  if (!movie?.genre_ids?.length) return;
+  if (movie?.id == null) return;
   try {
     const meta = JSON.parse(localStorage.getItem(GUEST_META_KEY) ?? '{}');
-    meta[movie.id] = { genres: movie.genre_ids };
+    const prev = meta[movie.id] ?? {};
+    meta[movie.id] = {
+      genres: movie.genre_ids?.length ? movie.genre_ids : prev.genres,
+      title: movie.title ?? prev.title,
+      poster: movie.poster_path ?? prev.poster,
+      kind: movie.kind ?? prev.kind ?? 'movie',
+    };
     localStorage.setItem(GUEST_META_KEY, JSON.stringify(meta));
   } catch {}
 }
@@ -43,10 +49,42 @@ function writeGuestSet(key, set) {
 }
 
 export function useGuestData() {
-  const [localTheme, setLocalTheme] = useState('dark');
+  const [localTheme, setLocalThemeState] = useState(() => {
+    try {
+      return localStorage.getItem('yo-theme') || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+  // Persisted so the theme survives route changes without an account
+  const setLocalTheme = useCallback((theme) => {
+    setLocalThemeState(theme);
+    try {
+      localStorage.setItem('yo-theme', theme);
+    } catch {}
+  }, []);
   const [localExcluded, setLocalExcluded] = useState(() => new Set());
   const [localFavorites, setLocalFavorites] = useState(() => readGuestSet('yo-favs'));
   const [localWatchlist, setLocalWatchlist] = useState(() => readGuestSet('yo-watch'));
+  // Guest ratings: { [tmdbId]: { rating, review?, title?, posterPath?, genre_ids? } }
+  const [localRatings, setLocalRatings] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('yo-ratings') ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+  const setGuestRating = useCallback((tmdbId, entry) => {
+    setLocalRatings((prev) => {
+      const next = { ...prev };
+      if (entry == null) delete next[tmdbId];
+      else next[tmdbId] = entry;
+      try {
+        localStorage.setItem('yo-ratings', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // Toggle an id in a persisted set; remembers genres for the profile
   const toggleInSet = useCallback((key, setState, movie) => {
@@ -84,6 +122,8 @@ export function useGuestData() {
     setLocalExcluded,
     localFavorites,
     localWatchlist,
+    localRatings,
+    setGuestRating,
     toggleFavorite,
     toggleWatchlist,
     clearExcluded,

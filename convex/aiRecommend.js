@@ -10,6 +10,7 @@ const TMDB_BASE = "https://api.themoviedb.org/3";
 
 const movieValidator = v.object({
   id: v.number(),
+  kind: v.optional(v.string()),
   title: v.string(),
   poster_path: v.optional(v.string()),
   release_date: v.optional(v.string()),
@@ -18,9 +19,9 @@ const movieValidator = v.object({
   genre_ids: v.array(v.number()),
 });
 
-async function tmdbSearch(apiKey, title, year, language = "en-US") {
+async function tmdbSearch(apiKey, title, year, language = "en-US", kind = "movie") {
   const tryFetch = async (params) => {
-    const url = new URL(`${TMDB_BASE}/search/movie`);
+    const url = new URL(`${TMDB_BASE}/search/${kind}`);
     url.searchParams.set("language", language);
     for (const [k, value] of Object.entries(params)) {
       if (value !== undefined && value !== null && value !== "") {
@@ -44,16 +45,20 @@ async function tmdbSearch(apiKey, title, year, language = "en-US") {
 }
 
 export const recommend = action({
-  args: { text: v.string(), lang: v.optional(v.string()) },
+  args: { text: v.string(), lang: v.optional(v.string()), kind: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const query = args.text.trim().slice(0, 500);
     if (!query) throw new Error("Empty search");
+    // Movies or TV shows — shapes the prompt, endpoints, and cache key
+    const kind = args.kind === "tv" ? "tv" : "movie";
+    const kindNoun = kind === "tv" ? "TV shows" : "movies";
+    const kindNounLower = kind === "tv" ? "shows" : "films";
     // Arabic UI → Arabic overviews + Arabic reason line
     const tmdbLang = args.lang === "ar" ? "ar-SA" : "en-US";
     const reasonLang = args.lang === "ar" ? "Write the reason in Arabic." : "";
 
-    // Exact-repeat cache (case-insensitive)
-    const key = query.toLowerCase();
+    // Exact-repeat cache (case-insensitive, per kind + language)
+    const key = `${kind}:${tmdbLang}:${query.toLowerCase()}`;
     const cached = await ctx.runQuery(internal.aiRecommend.getCached, { text: key });
     if (cached) {
       return { movies: cached.movies, reason: cached.reason ?? null, cached: true };
@@ -66,9 +71,10 @@ export const recommend = action({
     const model = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
 
     const prompt =
-      `Recommend movies for someone's current feeling. The person says: "${query}"\n\n` +
-      `Name 20 REAL, well-known movies that fit, split into two different lists of 10: ` +
+      `Recommend ${kindNoun} for someone's current feeling. The person says: "${query}"\n\n` +
+      `Name 20 REAL, well-known ${kindNounLower} that fit, split into two different lists of 10: ` +
       `"movies" (the 10 best fits) and "more_movies" (10 MORE, all different, mix eras and styles, no repeats). ` +
+      `For TV mode name series by their exact series title. ` +
       `If they name an actor, director, or character owner (e.g. "DiCaprio", "Nolan films", "more like Dune"), ` +
       `put that person's name in "person" — otherwise null. ` +
       `${reasonLang} ` +
@@ -137,9 +143,10 @@ export const recommend = action({
         seenIds.add(hit.id);
         movies.push({
           id: hit.id,
-          title: hit.title,
+          kind,
+          title: hit.title ?? hit.name,
           poster_path: hit.poster_path ?? undefined,
-          release_date: hit.release_date ?? undefined,
+          release_date: hit.release_date ?? hit.first_air_date ?? undefined,
           vote_average: hit.vote_average ?? undefined,
           overview: hit.overview ?? undefined,
           genre_ids: hit.genre_ids ?? [],
@@ -161,7 +168,7 @@ export const recommend = action({
           const person = (pdata.results ?? [])[0];
           if (person) {
             personName = person.name;
-            const durl = new URL(`${TMDB_BASE}/discover/movie`);
+            const durl = new URL(`${TMDB_BASE}/discover/${kind}`);
             durl.searchParams.set("api_key", tmdbKey);
             durl.searchParams.set("language", tmdbLang);
             durl.searchParams.set("with_cast", String(person.id));
@@ -184,7 +191,7 @@ export const recommend = action({
     for (const pick of picks) {
       if (!pick?.title || movies.length >= 20) continue;
       try {
-        const hit = await tmdbSearch(tmdbKey, pick.title, pick.year, tmdbLang);
+        const hit = await tmdbSearch(tmdbKey, pick.title, pick.year, tmdbLang, kind);
         pushHit(hit);
       } catch {
         // Skip unresolvable titles — never fail the whole batch for one miss
@@ -237,7 +244,7 @@ export const recommend = action({
             for (const pick of extra) {
               if (!pick?.title || movies.length >= 20) break;
               try {
-                pushHit(await tmdbSearch(tmdbKey, pick.title, pick.year, tmdbLang));
+                pushHit(await tmdbSearch(tmdbKey, pick.title, pick.year, tmdbLang, kind));
               } catch {
                 // skip misses
               }

@@ -137,6 +137,20 @@ export default function MovieCard({ movie, t, str, index, onExclude, isFavorite,
           }}
         >
           <span>{year}</span>
+          {movie.kind === 'tv' && (
+            <span
+              style={{
+                background: `${t.accent}22`,
+                color: t.accent,
+                fontSize: 10.5,
+                fontWeight: 700,
+                padding: '2px 7px',
+                borderRadius: 999,
+              }}
+            >
+              TV
+            </span>
+          )}
           {rating !== '—' && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
               <Star size={12} fill={t.accent} stroke={t.accent} />

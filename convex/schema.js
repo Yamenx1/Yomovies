@@ -29,6 +29,7 @@ export default defineSchema({
     tmdbId: v.number(),
     title: v.string(),
     posterPath: v.optional(v.string()),
+    kind: v.optional(v.string()),
     genre_ids: v.optional(v.array(v.number())),
     addedAt: v.number(),
   })
@@ -41,6 +42,7 @@ export default defineSchema({
     tmdbId: v.number(),
     title: v.string(),
     posterPath: v.optional(v.string()),
+    kind: v.optional(v.string()),
     genre_ids: v.optional(v.array(v.number())),
     addedAt: v.number(),
   })
@@ -61,6 +63,7 @@ export default defineSchema({
     movies: v.array(
       v.object({
         id: v.number(),
+        kind: v.optional(v.string()),
         title: v.string(),
         poster_path: v.optional(v.string()),
         release_date: v.optional(v.string()),
@@ -79,4 +82,20 @@ export default defineSchema({
     text: v.string(),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  // Personal star ratings + optional mini-reviews. High ratings amplify
+  // the taste profile, low ratings push those genres down.
+  ratings: defineTable({
+    userId: v.string(),
+    tmdbId: v.number(),
+    title: v.string(),
+    posterPath: v.optional(v.string()),
+    kind: v.optional(v.string()),
+    genre_ids: v.optional(v.array(v.number())),
+    rating: v.number(), // 1–5
+    review: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_tmdb", ["userId", "tmdbId"]),
 });

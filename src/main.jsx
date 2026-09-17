@@ -53,3 +53,10 @@ try {
     `<pre style="background:#00000055;border:1px solid #ffffff22;border-radius:8px;padding:12px;font-size:13px;white-space:pre-wrap;word-break:break-word">${safe}</pre>` +
     `<p style="font-size:13px;opacity:.7">Screenshot this and send it over — it says exactly what's missing.</p></div></div>`;
 }
+
+// PWA: offline app-shell cache, production only (dev keeps hot reload clean)
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
